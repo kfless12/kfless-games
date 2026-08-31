@@ -54,6 +54,9 @@ docker compose up --build
 | `npm run build` | Production build (standalone output) |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run lint` | ESLint |
+| `npm test` | All tests (needs the compose Postgres up) |
+| `npm run test:unit` | Pure-logic tests only, no database |
+| `npm run test:watch` | Tests in watch mode |
 | `npm run db:up` / `db:down` | Start / stop the compose Postgres |
 | `npm run db:generate` | Generate a migration from `lib/db/schema.ts` |
 | `npm run db:migrate` | Apply pending migrations |
@@ -71,6 +74,8 @@ app/                 routes (App Router)
   api/health/        liveness + DB readiness endpoint
 lib/
   auth.ts            THE auth module — identify() and nothing else
+  session.ts         cookie format + role resolution (pure, tested)
+  rate-limit.ts      backoff arithmetic (pure, tested)
   credentials.ts     token / join-code formats, shared with the seed
   audit.ts           append-only audit trail
   env.ts             environment access, SPEC.md §10.3
@@ -82,8 +87,26 @@ drizzle/             generated migrations (committed)
 scripts/
   migrate.ts         migration runner
   seed.ts            roster seeder, validates before writing
+  seed-validate.ts   roster validation (pure, tested)
   seed-data.ts       THE ROSTER — replace the placeholder names here
 ```
+
+## Tests
+
+Node's built-in test runner via `tsx`. No test framework dependency.
+
+```bash
+npm run db:up && npm run db:migrate   # database tests need Postgres
+npm test
+```
+
+What gets a test and what does not is in CLAUDE.md. Short version: complex
+logic, anything touching undo, security-relevant code, and database invariants
+that TypeScript cannot see. Not layout, not copy, not framework behaviour, and
+no browser driver.
+
+`lib/db/schema.test.ts` runs against the compose Postgres inside transactions
+that always roll back. Do not point it at a database with real event data.
 
 ## Auth
 

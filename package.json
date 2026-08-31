@@ -14,7 +14,10 @@
     "db:up": "docker compose up -d db",
     "db:down": "docker compose down",
     "db:seed": "tsx scripts/seed.ts",
-    "db:reset": "SEED_RESET=1 tsx scripts/seed.ts"
+    "db:reset": "SEED_RESET=1 tsx scripts/seed.ts",
+    "test": "tsx --test $(find lib scripts -name '*.test.ts' | sort)",
+    "test:watch": "tsx --test --watch $(find lib scripts -name '*.test.ts' | sort)",
+    "test:unit": "tsx --test $(find lib scripts -name '*.test.ts' -not -name 'schema.test.ts' | sort)"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.2",

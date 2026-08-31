@@ -12,6 +12,7 @@ import {
 } from '../lib/db/schema';
 import { newJoinCode, newToken } from '../lib/credentials';
 import { SEED_PLAYERS, SEED_TEAMS } from './seed-data';
+import { validateRoster } from './seed-validate';
 
 loadEnv({ path: ['.env.local', '.env'], quiet: true });
 
@@ -26,64 +27,13 @@ loadEnv({ path: ['.env.local', '.env'], quiet: true });
  * app-issued one.
  */
 
-const EXPECTED_PLAYERS = 17;
-const EXPECTED_TEAMS = 4;
-
 function validate() {
-  const problems: string[] = [];
+  const problems = validateRoster(SEED_PLAYERS, SEED_TEAMS);
+  if (problems.length === 0) return;
 
-  if (SEED_PLAYERS.length !== EXPECTED_PLAYERS) {
-    problems.push(`expected ${EXPECTED_PLAYERS} players, found ${SEED_PLAYERS.length}`);
-  }
-  if (SEED_TEAMS.length !== EXPECTED_TEAMS) {
-    problems.push(`expected ${EXPECTED_TEAMS} teams, found ${SEED_TEAMS.length}`);
-  }
-
-  const captains = SEED_PLAYERS.filter((p) => p.isCaptain);
-  if (captains.length !== EXPECTED_TEAMS) {
-    problems.push(`expected ${EXPECTED_TEAMS} captains, found ${captains.length}`);
-  }
-
-  const admins = SEED_PLAYERS.filter((p) => p.isAdmin);
-  if (admins.length !== 1) {
-    problems.push(`expected exactly 1 admin, found ${admins.length}`);
-  }
-
-  const emails = SEED_PLAYERS.map((p) => p.email.toLowerCase());
-  const duplicateEmails = emails.filter((e, i) => emails.indexOf(e) !== i);
-  if (duplicateEmails.length > 0) {
-    problems.push(`duplicate emails: ${[...new Set(duplicateEmails)].join(', ')}`);
-  }
-
-  const positions = SEED_TEAMS.map((t) => t.draftPosition).sort((a, b) => a - b);
-  if (positions.join(',') !== '1,2,3,4') {
-    problems.push(`draft positions must be 1,2,3,4 with no repeats; got ${positions.join(',')}`);
-  }
-
-  const captainEmails = new Set(captains.map((c) => c.email.toLowerCase()));
-  const claimed = new Set<string>();
-  for (const team of SEED_TEAMS) {
-    const email = team.captainEmail.toLowerCase();
-    if (!captainEmails.has(email)) {
-      problems.push(`team "${team.name}" captain ${team.captainEmail} is not a captain`);
-    }
-    if (claimed.has(email)) {
-      problems.push(`${team.captainEmail} is captain of more than one team`);
-    }
-    claimed.add(email);
-  }
-
-  for (const team of SEED_TEAMS) {
-    if (!/^#[0-9a-fA-F]{6}$/.test(team.colorHex)) {
-      problems.push(`team "${team.name}" colorHex ${team.colorHex} is not #rrggbb`);
-    }
-  }
-
-  if (problems.length > 0) {
-    console.error('scripts/seed-data.ts is not valid:');
-    for (const problem of problems) console.error(`  - ${problem}`);
-    process.exit(1);
-  }
+  console.error('scripts/seed-data.ts is not valid:');
+  for (const problem of problems) console.error(`  - ${problem}`);
+  process.exit(1);
 }
 
 async function main() {

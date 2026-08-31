@@ -410,7 +410,10 @@ Build and test the engine against these three formats. Seed the development data
 
 ## 14. Build order
 
-Each phase should be independently verifiable.
+Each phase should be independently verifiable, and `npm test` passes at the end
+of every phase. What earns a test and what does not is in CLAUDE.md; the short
+version is that complex logic, anything touching undo, and database invariants
+get tests, and UI does not.
 
 **Phase 0 — Skeleton.** Next.js + Tailwind + Drizzle + Docker + docker-compose with Postgres. Migrations run. `output: 'standalone'` set. Deploys to the chosen host with a hello-world page.
 

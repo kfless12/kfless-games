@@ -43,6 +43,58 @@ Next.js App Router · TypeScript · Tailwind · PostgreSQL · Drizzle · Docker.
 
 Local dev runs against the Postgres in `docker-compose.yml`. Run migrations and tests against it rather than reasoning about the schema abstractly.
 
+## Testing
+
+Not chasing coverage. The point is narrow: complex logic must not break silently
+when a later phase touches it. `npm test` uses Node's built-in test runner
+through `tsx` — no test framework dependency.
+
+```bash
+npm test          # everything, including the database tests
+npm run test:unit # pure logic only, no database needed
+npm run test:watch
+```
+
+**Test it if it has any of these:**
+
+- Non-obvious branching or arithmetic — the double-elimination engine, snake
+  order, points aggregation, tie-breakers, rate-limit backoff.
+- Security consequences — cookie signing and tamper rejection, role resolution,
+  the server-side authorization check on an action.
+- Undo. Undo is the safety net for the whole event; if it breaks, three days of
+  results are silently wrong.
+- A database invariant the code leans on — a check constraint, a generated
+  column. TypeScript cannot see these, and a later migration can quietly drop
+  one.
+- A bug you just fixed. Add the test that would have caught it.
+
+**Don't bother:**
+
+- Layout, styling, copy.
+- Straight-line CRUD with no branching.
+- Framework behaviour — that Next sets a cookie, that Drizzle emits SQL.
+- Anything needing a browser driver. No Playwright, no Cypress. Verify UI by
+  running the app and looking at it.
+
+**How to write them:**
+
+- Tests sit next to the code as `*.test.ts`.
+- Keep pure logic in modules that do not import `next/headers`, so it stays
+  testable outside a request. `lib/session.ts` and `lib/rate-limit.ts` are the
+  pattern: `lib/auth.ts` is a thin adapter over them, and its public surface
+  stays as narrow as SPEC.md §3.1 demands.
+- Database tests run against the docker-compose Postgres, inside a transaction
+  that always rolls back. Never point them at a database holding real event
+  data.
+- Assert the transition, not just the end state. A test that passes when the
+  value is always `false` is not a test.
+- After writing a test, break the thing it covers and confirm the test fails.
+  A green test that never bites is worse than no test, because it buys
+  confidence it has not earned.
+
+**`npm test` must pass before a phase is done.** Report the actual counts, not
+"tests pass".
+
 ## Working style
 
 - **One phase per session.** Build order is SPEC.md §14. Don't work ahead.

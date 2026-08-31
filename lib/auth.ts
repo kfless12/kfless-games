@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { timingSafeEqual } from 'node:crypto';
 
 import { and, desc, eq, gte, isNull, sql } from 'drizzle-orm';
 import { cookies, headers } from 'next/headers';
@@ -7,6 +7,20 @@ import { joinPathFor, newJoinCode, newToken } from '@/lib/credentials';
 import { getDb } from '@/lib/db';
 import { authAttempts, credentials, players } from '@/lib/db/schema';
 import { requireEnv } from '@/lib/env';
+import {
+  ATTEMPT_RETENTION_HOURS,
+  ATTEMPT_WINDOW_MINUTES,
+  evaluateRateLimit,
+  type RateLimitVerdict,
+} from '@/lib/rate-limit';
+import {
+  COOKIE_NAME,
+  parseSession,
+  readCookieFromHeader,
+  resolveRole,
+  SESSION_SECONDS,
+  serializeSession,
+} from '@/lib/session';
 
 /*
  * The only auth module. SPEC.md §3.1: every route handler and every server
@@ -21,13 +35,13 @@ import { requireEnv } from '@/lib/env';
 // Types
 // ---------------------------------------------------------------------------
 
-export type Role = 'ADMIN' | 'CAPTAIN' | 'PLAYER';
+export type { Role } from '@/lib/session';
 
 /** Exactly the shape SPEC.md §3.1 specifies. */
 export type Identity = {
   personId: string;
   teamId: string | null;
-  role: Role;
+  role: import('@/lib/session').Role;
 };
 
 export type IssuedCredential = {
@@ -39,54 +53,6 @@ export type IssuedCredential = {
 // ---------------------------------------------------------------------------
 // Cookie
 // ---------------------------------------------------------------------------
-
-const COOKIE_NAME = 'kfless_session';
-
-/**
- * 90 days, per SPEC.md §3.2. Deliberately outlasts the event: an expired-link
- * screen on Saturday night is a failure, not a security win.
- */
-const SESSION_DAYS = 90;
-const SESSION_SECONDS = SESSION_DAYS * 24 * 60 * 60;
-
-const COOKIE_VERSION = 'v1';
-
-function sign(payload: string): string {
-  return createHmac('sha256', requireEnv('SESSION_SECRET')).update(payload).digest('base64url');
-}
-
-/**
- * `v1.<personId>.<expiryEpochSeconds>.<elevated>.<hmac>`
- *
- * `elevated` records a break-glass ADMIN_CREDENTIAL elevation. It is inside the
- * signed payload, so it cannot be flipped client-side.
- */
-function serializeSession(personId: string, expiresAt: number, elevated: boolean): string {
-  const payload = `${COOKIE_VERSION}.${personId}.${expiresAt}.${elevated ? '1' : '0'}`;
-  return `${payload}.${sign(payload)}`;
-}
-
-type Session = { personId: string; elevated: boolean };
-
-function parseSession(raw: string | undefined): Session | null {
-  if (!raw) return null;
-
-  const parts = raw.split('.');
-  if (parts.length !== 5) return null;
-
-  const [version, personId, expiresAtRaw, elevatedRaw, mac] = parts;
-  if (version !== COOKIE_VERSION) return null;
-
-  const payload = `${version}.${personId}.${expiresAtRaw}.${elevatedRaw}`;
-  const expected = Buffer.from(sign(payload));
-  const actual = Buffer.from(mac);
-  if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) return null;
-
-  const expiresAt = Number(expiresAtRaw);
-  if (!Number.isFinite(expiresAt) || expiresAt * 1000 <= Date.now()) return null;
-
-  return { personId, elevated: elevatedRaw === '1' };
-}
 
 function cookieOptions() {
   return {
@@ -101,7 +67,11 @@ function cookieOptions() {
 async function setSessionCookie(personId: string, elevated: boolean) {
   const expiresAt = Math.floor(Date.now() / 1000) + SESSION_SECONDS;
   const store = await cookies();
-  store.set(COOKIE_NAME, serializeSession(personId, expiresAt, elevated), cookieOptions());
+  store.set(
+    COOKIE_NAME,
+    serializeSession(requireEnv('SESSION_SECRET'), personId, expiresAt, elevated),
+    cookieOptions(),
+  );
 }
 
 /** Sign out. Only callable from a route handler or server action. */
@@ -128,7 +98,7 @@ export async function identify(request?: Request): Promise<Identity | null> {
     ? readCookieFromHeader(request.headers.get('cookie'), COOKIE_NAME)
     : (await cookies()).get(COOKIE_NAME)?.value;
 
-  const session = parseSession(raw);
+  const session = parseSession(requireEnv('SESSION_SECRET'), raw);
   if (!session) return null;
 
   const db = getDb();
@@ -151,21 +121,6 @@ export async function identify(request?: Request): Promise<Identity | null> {
     teamId: player.teamId,
     role: resolveRole(player.isAdmin || session.elevated, player.isCaptain),
   };
-}
-
-function resolveRole(isAdmin: boolean, isCaptain: boolean): Role {
-  if (isAdmin) return 'ADMIN';
-  if (isCaptain) return 'CAPTAIN';
-  return 'PLAYER';
-}
-
-function readCookieFromHeader(header: string | null, name: string): string | undefined {
-  if (!header) return undefined;
-  for (const part of header.split(';')) {
-    const [key, ...rest] = part.trim().split('=');
-    if (key === name) return decodeURIComponent(rest.join('='));
-  }
-  return undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -195,27 +150,13 @@ export function canActForTeam(identity: Identity | null, teamId: string): boolea
 // §10.2 forbids in-memory state across requests.
 // ---------------------------------------------------------------------------
 
-const FREE_ATTEMPTS = 5;
-const ATTEMPT_WINDOW_MINUTES = 60;
-
-/*
- * SPEC.md §3.4 mandates "5 attempts per IP, then exponential backoff" but does
- * not fix the ceiling. It is capped at a minute rather than something longer
- * because of how this event actually works: all 17 guests are on one home wifi
- * and therefore share one public IP. A long ceiling means one person fumbling
- * their code locks the whole party out. A minute is still enough to make
- * grinding a 6-digit code hopeless — 17 valid codes in a space of a million.
- */
-const MAX_BACKOFF_SECONDS = 60;
-const ATTEMPT_RETENTION_HOURS = 24;
-
-export type RateLimitVerdict = { allowed: true } | { allowed: false; retryAfterSeconds: number };
-
 /**
- * 5 failures per IP are free, then exponential backoff: 2s, 4s, 8s, ... capped
- * at MAX_BACKOFF_SECONDS. Only failures count, and a success clears the IP's
- * history (see recordAttempt), so one person finally getting in unblocks
- * everyone else sharing that wifi immediately.
+ * 5 failures per IP are free, then exponential backoff. Only failures count,
+ * and a success clears the IP's history (see recordAttempt), so one person
+ * finally getting in unblocks everyone else sharing that wifi immediately.
+ *
+ * The arithmetic is in lib/rate-limit.ts; this function only supplies it with
+ * what Postgres knows.
  */
 export async function checkRateLimit(ip: string): Promise<RateLimitVerdict> {
   const db = getDb();
@@ -238,18 +179,11 @@ export async function checkRateLimit(ip: string): Promise<RateLimitVerdict> {
     )
     .orderBy(desc(authAttempts.attemptedAt));
 
-  if (failures.length < FREE_ATTEMPTS) return { allowed: true };
-
-  const backoffSeconds = Math.min(
-    2 ** (failures.length - FREE_ATTEMPTS + 1),
-    MAX_BACKOFF_SECONDS,
+  return evaluateRateLimit(
+    failures.length,
+    failures.length > 0 ? failures[0].attemptedAt.getTime() : null,
+    Date.now(),
   );
-  const lastFailureAt = failures[0].attemptedAt.getTime();
-  const readyAt = lastFailureAt + backoffSeconds * 1000;
-  const waitMs = readyAt - Date.now();
-
-  if (waitMs <= 0) return { allowed: true };
-  return { allowed: false, retryAfterSeconds: Math.ceil(waitMs / 1000) };
 }
 
 async function recordAttempt(ip: string, succeeded: boolean) {
