@@ -3,18 +3,11 @@
  * throwing while a module loads would break `next build` on a host that builds
  * without a database.
  *
- * The full variable surface is SPEC.md §10.3. Only DATABASE_URL is consumed in
- * Phase 0; SESSION_SECRET and ADMIN_CREDENTIAL arrive with auth in Phase 1, and
- * the S3_* group with uploads in Phase 2.
+ * The full variable surface is SPEC.md §10.3 — these three and nothing else.
+ * There is deliberately no object storage configuration: images live in
+ * Postgres (SPEC.md §9.3).
  */
-type EnvName =
-  | 'DATABASE_URL'
-  | 'SESSION_SECRET'
-  | 'ADMIN_CREDENTIAL'
-  | 'S3_ENDPOINT'
-  | 'S3_BUCKET'
-  | 'S3_ACCESS_KEY'
-  | 'S3_SECRET_KEY';
+type EnvName = 'DATABASE_URL' | 'SESSION_SECRET' | 'ADMIN_CREDENTIAL';
 
 export function requireEnv(name: EnvName): string {
   const value = process.env[name];

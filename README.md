@@ -136,7 +136,8 @@ docker build --target runner -t kfless-games .
 Full list in SPEC.md §10.2 and CLAUDE.md. The short version:
 
 - `output: 'standalone'` stays set in `next.config.js`.
-- No local filesystem writes. Uploads go to S3-compatible object storage.
+- No local filesystem writes. Images are stored in Postgres as `bytea` and
+  served from `/api/images/<id>`.
 - No in-memory state across requests. All state lives in Postgres.
 - No background workers, cron, or WebSockets. Liveness comes from client polling.
 - Points are derived from results at read time, never stored and incremented.

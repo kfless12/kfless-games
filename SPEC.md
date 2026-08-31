@@ -178,6 +178,31 @@ This is the only input to the leaderboard.
 
 Log every score submission, score edit, undo, draft pick, draft undo, game create/delete, and team name/logo change. Viewable by admin.
 
+### 4.9 `images`
+
+Player photos and team logos, stored as bytes in Postgres. See §9.3 for why.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid pk | appears in the URL |
+| `mime_type` | text | `image/jpeg`, `image/png`, or `image/webp` |
+| `bytes` | bytea | the image itself |
+| `byte_size` | int | |
+| `width` | int | |
+| `height` | int | |
+| `uploaded_by` | uuid null fk | who uploaded it |
+| `created_at` | timestamptz | |
+
+Bytes live in their own table so that listing players never drags image data
+along with it.
+
+`players.photo_url` and `teams.logo_url` are unchanged and hold
+`/api/images/<id>`. Keeping the indirection means the storage decision is
+confined to the upload handler.
+
+Replacing an image inserts a new row with a new `id`, so the URL changes. That
+is what makes the aggressive caching in §9.3 safe.
+
 ---
 
 ## 5. The draft
@@ -326,9 +351,30 @@ Captains can edit their **team name** and upload a **team logo** at any time. Bo
 
 Player photos, team logos, and the central event logo.
 
-- **Uploads go to object storage, never the local filesystem.** DO Spaces or Cloudflare R2 (both S3-compatible; use `@aws-sdk/client-s3`). Writing to `/public` breaks on every container host and on Vercel.
+- **Uploads go into Postgres as `bytea`, never the local filesystem.** Writing
+  to `/public` breaks on every container host and on Vercel.
 - The event logo is a static asset in the repo and may live in `/public`.
-- Accept JPEG/PNG/WebP, cap at 5 MB, resize server-side to max 800px, store the URL.
+- Accept JPEG/PNG/WebP. Cap at 5 MB and 2000px on the longest side.
+- The browser resizes to max 800px on a canvas before uploading, so a phone
+  sends roughly 150 KB instead of 7 MB. Canvas re-encoding also drops EXIF,
+  which keeps GPS coordinates out of the database.
+- The server does not re-encode. It verifies that the magic bytes match the
+  declared MIME type, reads the real dimensions out of the image header, and
+  enforces the caps above. A client that skips the resize gets rejected, not
+  trusted.
+- Served from `GET /api/images/<id>` with
+  `Cache-Control: public, max-age=31536000, immutable`. Safe because a replaced
+  image gets a new `id`, so each browser fetches a given image exactly once and
+  a replacement still appears immediately.
+
+**Why Postgres and not S3.** Measured: a 4032x3024 photo resized to 800px is
+about 200 KB at worst, and there are roughly 22 images in the whole event, so
+total storage is a few megabytes. Against that, object storage costs four
+environment variables, an SDK, an external account to configure per host, and
+it splits the app's state across two systems — a `pg_dump` would not contain
+the photos. §10.2 says all state lives in Postgres; this makes that true rather
+than nearly true. The cost is that the app serves the images itself with no
+CDN, which at 17 users with immutable caching does not matter.
 
 ---
 
@@ -354,14 +400,17 @@ This keeps DO App Platform, a DO Droplet, Fly, Render, Railway, and Cloud Run al
 
 These are what keep every host viable:
 
-- No writes to the local filesystem. Uploads go to object storage.
+- No writes to the local filesystem. Uploads go into Postgres (§9.3).
 - No in-memory state that assumes a single long-lived process (no module-level caches holding draft state, no in-process queues).
 - No background workers, cron loops, or custom WebSocket server. All liveness comes from client polling.
 - All state lives in Postgres.
 
 ### 10.3 Environment
 
-`DATABASE_URL`, `SESSION_SECRET`, `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `ADMIN_CREDENTIAL`.
+`DATABASE_URL`, `SESSION_SECRET`, `ADMIN_CREDENTIAL`.
+
+That is the whole list. There is deliberately no object storage configuration —
+see §9.3.
 
 ---
 
@@ -382,6 +431,15 @@ Detailed styling is deferred; the following are structural requirements.
 Do not build these. Each was considered and rejected.
 
 - **PWA, service workers, offline sync, IndexedDB, background sync.** The headline benefit — queue a score offline and background-sync it later — **does not work on iOS**, where Safari has never implemented the Background Sync API. Most guests will be on iPhones. It would be the most bug-prone code in the project, nearly impossible to test before the event, and it would produce stale-data-presented-as-live, which is worse than an honest offline banner. The `localStorage` retry in §8 covers the realistic failure mode, which is a dropped request, not a two-hour outage. Bring paper scorecards as the real backup.
+- **S3-compatible object storage** (DO Spaces, Cloudflare R2, `@aws-sdk/client-s3`).
+  Reversed after measuring: ~22 images at ~200 KB each is a few megabytes, which
+  Postgres holds without noticing. Object storage would add four environment
+  variables, an SDK, and an external account to set up per host, and would put
+  half the app's state outside the database. See §9.3.
+- **A server-side image processing library** (`sharp` and friends). The browser
+  already resizes on a canvas before upload, and the server validates rather
+  than re-encodes, so the native dependency and the ~28 MB it adds to the image
+  buy nothing here.
 - Native mobile apps.
 - SMS / Twilio / push notifications.
 - Email/password accounts, OAuth, social login, password resets.
@@ -419,7 +477,7 @@ get tests, and UI does not.
 
 **Phase 1 — Data and auth.** All tables. Seed script with 17 real names and 4 teams. Auth module per §3 with the chosen strategy behind the `identify()` interface. Admin console shell with credential list.
 
-**Phase 2 — Profiles and teams.** Self-service profile editing, photo upload to object storage, captain team name + logo editing. Verifiable: a player can fill in their own card end to end and it renders.
+**Phase 2 — Profiles and teams.** Self-service profile editing, photo upload into Postgres (§9.3), captain team name + logo editing. Verifiable: a player can fill in their own card end to end and it renders.
 
 **Phase 3 — Draft.** Snake order computation, single-picker enforcement (server-side), draft board, pick history, admin override and undo, Mister Irrelevant assignment. Verifiable: 13 picks complete correctly and pick 13 gets the label.
 

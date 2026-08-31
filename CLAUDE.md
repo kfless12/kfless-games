@@ -15,7 +15,7 @@ This is the most important rule here. Open decisions are tracked in SPEC.md §15
 ## Invariants — do not violate these
 
 1. **Points are derived, never stored.** Standings and totals are always computed from `game_results` and match rows at read time. There is no `total_points` column that gets incremented. This is what makes undo work.
-2. **No filesystem writes.** Player photos and team logos go to S3-compatible object storage. Never `/public`, never `/tmp`.
+2. **No filesystem writes.** Player photos and team logos are stored as `bytea` in Postgres and served from `/api/images/<id>`. Never `/public`, never `/tmp`. See SPEC.md §9.3 — object storage was considered and reversed after measuring the actual image sizes.
 3. **No in-memory state across requests.** No module-level caches holding draft or queue state. All state lives in Postgres.
 4. **No background workers, cron, or WebSockets.** All liveness comes from client polling. This keeps the app deployable to any container host.
 5. **All auth goes through `identify()` in `lib/auth.ts`.** No route handler or component reads a token, PIN, or cookie directly.
@@ -27,6 +27,7 @@ This is the most important rule here. Open decisions are tracked in SPEC.md §15
 Each of these was considered and rejected for a stated reason in SPEC.md §12. Do not re-propose them.
 
 - PWA, service workers, offline sync, IndexedDB, background sync
+- S3-compatible object storage, `@aws-sdk/client-s3`, and server-side image processing libraries like `sharp`
 - Native apps, SMS, push notifications
 - Email/password accounts, OAuth, NextAuth
 - Supabase, AWS Lambda, any separate backend service
