@@ -1,0 +1,41 @@
+@import 'tailwindcss';
+
+/*
+ * Light, very high-contrast theme, deliberately the default. SPEC.md §11:
+ * the event is outdoors in daylight, where dark themes wash out. A dark-mode
+ * toggle is a nice-to-have; it must never become the default, so there is no
+ * `prefers-color-scheme: dark` override here.
+ *
+ * Raw values are declared without the `--color-` prefix, then mapped into
+ * Tailwind's colour namespace below. Naming both sides `--color-*` would make
+ * the @theme mapping refer to itself and the colours would not resolve.
+ *
+ * Full styling is Phase 7. This is only the baseline.
+ */
+
+:root {
+  --ink: #0a0a0a;
+  --paper: #ffffff;
+  --muted: #44464d;
+  --rule: #b8bcc4;
+}
+
+@theme inline {
+  --color-ink: var(--ink);
+  --color-paper: var(--paper);
+  --color-muted: var(--muted);
+  --color-rule: var(--rule);
+  --font-sans:
+    system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+html {
+  color-scheme: light;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+}
