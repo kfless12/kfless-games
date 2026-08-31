@@ -5,7 +5,7 @@ online snake draft, and a tournament engine with a live "up next" queue.
 
 `SPEC.md` is the source of truth. `CLAUDE.md` holds the working rules.
 
-**Status: Phase 0 (skeleton) complete.** Build order is SPEC.md §14.
+**Status: Phase 1 (data and auth) complete.** Build order is SPEC.md §14.
 
 ## Stack
 
@@ -16,11 +16,21 @@ Next.js 16 (App Router) · TypeScript · Tailwind v4 · PostgreSQL 17 · Drizzle
 Postgres runs in Docker; Next runs on the host.
 
 ```bash
-cp .env.example .env      # DATABASE_URL already points at the compose db
+cp .env.example .env
+# fill in SESSION_SECRET and ADMIN_CREDENTIAL — both are required now:
+#   openssl rand -hex 32
 npm install
 npm run db:up             # start Postgres (host port 5433)
 npm run db:migrate        # apply migrations
+npm run db:seed           # 17 players, 4 teams, 17 credentials
 npm run dev               # http://localhost:3000
+```
+
+Then open `/admin` as the seeded admin to get everyone's join link. To find the
+admin's own link before you have a session:
+
+```bash
+docker compose exec -T db psql -U kfless -d kfless_games -tAc "select '/join/'||c.token from credentials c join players p on p.id=c.player_id where p.is_admin and c.revoked_at is null"
 ```
 
 The compose Postgres publishes **host port 5433**, not 5432, to avoid clashing
@@ -47,22 +57,45 @@ docker compose up --build
 | `npm run db:up` / `db:down` | Start / stop the compose Postgres |
 | `npm run db:generate` | Generate a migration from `lib/db/schema.ts` |
 | `npm run db:migrate` | Apply pending migrations |
+| `npm run db:seed` | Seed the roster from `scripts/seed-data.ts` |
+| `npm run db:reset` | Wipe and reseed (`SEED_RESET=1`) |
 | `npm run db:studio` | Drizzle Studio |
 
 ## Layout
 
 ```
 app/                 routes (App Router)
+  page.tsx           landing page
+  join/              magic link redemption + 6-digit code entry
+  admin/             gated admin console, credential list
   api/health/        liveness + DB readiness endpoint
 lib/
+  auth.ts            THE auth module — identify() and nothing else
+  credentials.ts     token / join-code formats, shared with the seed
+  audit.ts           append-only audit trail
   env.ts             environment access, SPEC.md §10.3
   db/
     index.ts         lazy pg Pool + Drizzle client
-    schema.ts        Drizzle schema
-    health.ts        Phase 0 connectivity check
+    schema.ts        Drizzle schema, SPEC.md §4
+    health.ts        connectivity check
 drizzle/             generated migrations (committed)
-scripts/migrate.ts   migration runner
+scripts/
+  migrate.ts         migration runner
+  seed.ts            roster seeder, validates before writing
+  seed-data.ts       THE ROSTER — replace the placeholder names here
 ```
+
+## Auth
+
+Per-person magic links with a 6-digit day-of fallback (SPEC.md §3.2).
+
+- `/join/<token>` sets a signed, httpOnly cookie for 90 days and redirects.
+- `/join` takes the 6-digit code for anyone who can't find their email.
+- Roles: `ADMIN` (from `players.is_admin`), `CAPTAIN` (`players.is_captain`),
+  `PLAYER`. No cookie means `PUBLIC` — read-only, no admin console.
+- `ADMIN_CREDENTIAL` is break-glass only: it elevates an **already identified**
+  person, so admin actions always have a real actor in `audit_log`.
+- Credential submission is rate limited per IP in Postgres, not in memory.
 
 ## Docker image targets
 
@@ -84,3 +117,7 @@ Full list in SPEC.md §10.2 and CLAUDE.md. The short version:
 - No in-memory state across requests. All state lives in Postgres.
 - No background workers, cron, or WebSockets. Liveness comes from client polling.
 - Points are derived from results at read time, never stored and incremented.
+- All auth goes through `identify()` in `lib/auth.ts`. No route handler or
+  component reads a token, code, or cookie directly.
+- Authorization is checked on the server in every action. A hidden or disabled
+  button is not a control.

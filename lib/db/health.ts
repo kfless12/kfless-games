@@ -1,19 +1,18 @@
 import { sql } from 'drizzle-orm';
 
 import { getDb } from './index';
-import { appHealth } from './schema';
 
 export type DatabaseHealth =
-  | { ok: true; serverVersion: string; migratedTables: number; healthRows: number }
+  | { ok: true; serverVersion: string; tables: number; players: number }
   | { ok: false; error: string };
 
 /**
- * Phase 0 verification: proves the app can reach Postgres and that migrations
- * have actually been applied (the app_health table exists and is queryable).
+ * Liveness check: proves the app can reach Postgres and that migrations have
+ * been applied.
  *
- * Returns a result rather than throwing so the page can render an honest
- * failure state instead of a 500. Stale or broken data presented as fine is
- * worse than an honest error — SPEC.md §7.3.
+ * Returns a result rather than throwing so callers can render an honest failure
+ * state instead of a 500. Stale or broken data presented as fine is worse than
+ * an honest error — SPEC.md §7.3.
  */
 export async function checkDatabase(): Promise<DatabaseHealth> {
   try {
@@ -21,15 +20,19 @@ export async function checkDatabase(): Promise<DatabaseHealth> {
 
     const version = await db.execute<{ version: string }>(sql`select version()`);
     const tables = await db.execute<{ count: string }>(
-      sql`select count(*)::text as count from information_schema.tables where table_schema = 'public'`,
+      sql`select count(*)::text as count
+          from information_schema.tables
+          where table_schema = 'public'`,
     );
-    const rows = await db.select().from(appHealth);
+    const players = await db.execute<{ count: string }>(
+      sql`select count(*)::text as count from players`,
+    );
 
     return {
       ok: true,
       serverVersion: version.rows[0]?.version?.split(' ').slice(0, 2).join(' ') ?? 'unknown',
-      migratedTables: Number(tables.rows[0]?.count ?? 0),
-      healthRows: rows.length,
+      tables: Number(tables.rows[0]?.count ?? 0),
+      players: Number(players.rows[0]?.count ?? 0),
     };
   } catch (error) {
     return { ok: false, error: describe(error) };
@@ -52,5 +55,5 @@ function describe(error: unknown): string {
   }
 
   if (parts.length === 0) return String(error);
-  return parts.join(' \u2190 ');
+  return parts.join(' ← ');
 }

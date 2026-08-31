@@ -12,7 +12,9 @@
     "db:migrate": "tsx scripts/migrate.ts",
     "db:studio": "drizzle-kit studio",
     "db:up": "docker compose up -d db",
-    "db:down": "docker compose down"
+    "db:down": "docker compose down",
+    "db:seed": "tsx scripts/seed.ts",
+    "db:reset": "SEED_RESET=1 tsx scripts/seed.ts"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.2",

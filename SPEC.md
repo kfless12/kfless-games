@@ -51,7 +51,7 @@ The player taken with pick 13 is permanently labeled **Mister Irrelevant** (afte
 
 ---
 
-## 3. Authentication — DECISION PENDING
+## 3. Authentication — DECIDED: per-person magic links with backup codes
 
 ### 3.1 The constraint
 
@@ -65,9 +65,9 @@ revokeCredential(personId) -> void
 
 Every route handler and every server component asks `identify()` and nothing else. No feature code reads a PIN or a token directly.
 
-### 3.2 Recommended strategy: per-person magic links
+### 3.2 Chosen strategy: per-person magic links
 
-Given that all 17 emails are already in hand, this is the better option and the one I'd build:
+Given that all 17 emails are already in hand, this is the better option and the one being built:
 
 - Each person gets a permanent, unguessable URL: `/join/<32-byte-random-token>`.
 - Hitting that URL sets a signed, httpOnly cookie valid for **90 days** and redirects to the dashboard. One tap, forever.
@@ -76,15 +76,6 @@ Given that all 17 emails are already in hand, this is the better option and the 
 - Every person is individually identified, which means the audit log (§8) and the draft history are meaningful for free.
 
 **Fallback for the day-of:** the admin page also shows a per-person 6-digit code. If someone can't find their email while standing in the yard, they enter the code at `/join` and get the same cookie. Codes are stored in plaintext deliberately so the admin can read them aloud — the threat model here is a friend being annoying, not an attacker.
-
-### 3.3 Alternative strategy: shared team PINs
-
-If chosen instead:
-
-- Admin credential must be **8+ characters**, not 4 digits. It is the credential that can rewrite three days of results.
-- Team PINs are 4 digits, unique across teams, avoiding `0000`, `1234`, and the year.
-- **After entering a team PIN, the user must select their name from that team's roster.** Without this, every action is attributed to "Team 3" and the audit log is useless.
-- Store team PINs recoverably so the admin can re-display them; hash only the admin credential.
 
 ### 3.4 Required regardless of strategy
 
@@ -441,7 +432,11 @@ Each phase should be independently verifiable.
 
 ## 15. Open decisions
 
-1. **Auth strategy** — magic links (recommended) vs. shared team PINs. §3.
+1. ~~**Auth strategy**~~ — RESOLVED: per-person magic links with the 6-digit
+   day-of backup codes. The shared-team-PIN alternative was removed from §3.
+   ADMIN comes from a `players.is_admin` flag, so the admin's own magic link
+   grants it; `ADMIN_CREDENTIAL` remains as a break-glass elevation for an
+   already-identified person, which keeps `audit_log.actor_person_id` populated.
 2. **Flip cup format** — round robin or double elimination.
 3. **Remaining game list** and each game's `points_matrix`.
 4. **Host** — DO App Platform vs. DO Droplet. Does not affect application code.

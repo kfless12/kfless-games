@@ -8,6 +8,20 @@
       "when": 1788192895320,
       "tag": "0000_phase0_app_health",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1788198330509,
+      "tag": "0001_phase1_data_model",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788198336413,
+      "tag": "0002_drop_phase0_app_health",
+      "breakpoints": true
     }
   ]
 }
