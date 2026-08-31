@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import type { AdminActionState } from './state';
 
 import { recordAudit } from '@/lib/audit';
+import { isUuid } from '@/lib/uuid';
 import {
   clientIp,
   elevateToAdmin,
@@ -41,7 +42,7 @@ export async function manageCredential(
   const playerId = String(formData.get('playerId') ?? '');
   const operation = String(formData.get('operation') ?? '');
 
-  if (!playerId) return { error: 'Missing player.', notice: null };
+  if (!isUuid(playerId)) return { error: 'Missing player.', notice: null };
   if (operation !== 'issue' && operation !== 'revoke') {
     return { error: 'Unknown operation.', notice: null };
   }

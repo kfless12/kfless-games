@@ -31,7 +31,13 @@ export default async function Home() {
   const db = getDb();
   const [me] = identity
     ? await db
-        .select({ fullName: players.fullName, teamName: teams.name, teamColor: teams.colorHex })
+        .select({
+          fullName: players.fullName,
+          photoUrl: players.photoUrl,
+          profileComplete: players.profileComplete,
+          teamName: teams.name,
+          teamColor: teams.colorHex,
+        })
         .from(players)
         .leftJoin(teams, eq(players.teamId, teams.id))
         .where(eq(players.id, identity.personId))
@@ -44,6 +50,7 @@ export default async function Home() {
       name: teams.name,
       colorHex: teams.colorHex,
       draftPosition: teams.draftPosition,
+      logoUrl: teams.logoUrl,
       captain: players.fullName,
     })
     .from(teams)
@@ -60,7 +67,17 @@ export default async function Home() {
       {identity && me ? (
         <section className="rounded-lg border-2 border-ink p-5">
           <p className="text-sm font-bold uppercase tracking-widest text-muted">Signed in as</p>
-          <p className="mt-1 text-2xl font-black">{me.fullName}</p>
+          <div className="mt-1 flex items-center gap-3">
+            {me.photoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={me.photoUrl}
+                alt=""
+                className="size-14 shrink-0 rounded-full border-2 border-rule object-cover"
+              />
+            ) : null}
+            <p className="text-2xl font-black">{me.fullName}</p>
+          </div>
           <p className="mt-1 flex items-center gap-2 text-base text-muted">
             {me.teamName ? (
               <>
@@ -77,7 +94,20 @@ export default async function Home() {
             <span aria-hidden>·</span>
             {identity.role}
           </p>
+          {!me.profileComplete && (
+            <p className="mt-3 text-base font-semibold">
+              Your card isn&apos;t finished &mdash; it needs a photo, all eight ratings, and a
+              scouting report.
+            </p>
+          )}
+
           <div className="mt-4 flex flex-wrap gap-2">
+            <Link
+              href="/me"
+              className="flex h-11 items-center rounded-lg border-2 border-ink px-4 text-base font-bold"
+            >
+              {me.profileComplete ? 'Edit my card' : 'Finish my card'}
+            </Link>
             {isAdmin(identity) && (
               <Link
                 href="/admin"
@@ -119,11 +149,20 @@ export default async function Home() {
               key={team.id}
               className="flex items-center gap-3 rounded-lg border-2 border-rule p-4"
             >
-              <span
-                aria-hidden
-                className="inline-block size-5 shrink-0 rounded-full border border-rule"
-                style={{ backgroundColor: team.colorHex }}
-              />
+              {team.logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={team.logoUrl}
+                  alt=""
+                  className="size-10 shrink-0 rounded-lg border-2 border-rule object-cover"
+                />
+              ) : (
+                <span
+                  aria-hidden
+                  className="inline-block size-5 shrink-0 rounded-full border border-rule"
+                  style={{ backgroundColor: team.colorHex }}
+                />
+              )}
               <span className="flex-1">
                 <span className="block text-lg font-bold">{team.name}</span>
                 <span className="block text-base text-muted">{team.captain}</span>
@@ -147,7 +186,7 @@ function Shell({ children }: { children: React.ReactNode }) {
   return (
     <main className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-6 px-5 py-10">
       <header>
-        <p className="text-sm font-bold uppercase tracking-widest text-muted">Phase 1</p>
+        <p className="text-sm font-bold uppercase tracking-widest text-muted">Phase 2</p>
         <h1 className="mt-1 text-4xl font-black tracking-tight">kfless games</h1>
       </header>
       {children}

@@ -96,7 +96,8 @@ export default async function AdminPage() {
         <h2 className="text-xl font-bold">Credentials</h2>
         <p className="text-base text-muted">
           Send each person their link once, from your own inbox. The 6-digit code is the
-          fallback for anyone who can&apos;t find the email in the yard.
+          fallback for anyone who can&apos;t find the email in the yard. Each row also shows
+          whether that person has finished their card, and lets you edit it for them.
         </p>
         <CredentialTable rows={rows} />
       </section>

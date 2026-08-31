@@ -5,7 +5,7 @@ online snake draft, and a tournament engine with a live "up next" queue.
 
 `SPEC.md` is the source of truth. `CLAUDE.md` holds the working rules.
 
-**Status: Phase 1 (data and auth) complete.** Build order is SPEC.md §14.
+**Status: Phase 2 (profiles and teams) complete.** Build order is SPEC.md §14.
 
 ## Stack
 
@@ -69,14 +69,20 @@ docker compose up --build
 ```
 app/                 routes (App Router)
   page.tsx           landing page
+  me/                self-service profile + captain team editing
   join/              magic link redemption + 6-digit code entry
-  admin/             gated admin console, credential list
+  admin/             gated admin console, credential list, edit any card
   api/health/        liveness + DB readiness endpoint
+  api/images/[id]/   serves images out of Postgres
 lib/
   auth.ts            THE auth module — identify() and nothing else
   session.ts         cookie format + role resolution (pure, tested)
   rate-limit.ts      backoff arithmetic (pure, tested)
   credentials.ts     token / join-code formats, shared with the seed
+  images.ts          upload validation: magic bytes, dimensions, caps (tested)
+  upload.ts          storing an image and cleaning up a replaced one
+  profile.ts         profile field list + form parsing (tested)
+  uuid.ts            id validation, so a bad id is a 404 not a 500
   audit.ts           append-only audit trail
   env.ts             environment access, SPEC.md §10.3
   db/
@@ -119,6 +125,22 @@ Per-person magic links with a 6-digit day-of fallback (SPEC.md §3.2).
 - `ADMIN_CREDENTIAL` is break-glass only: it elevates an **already identified**
   person, so admin actions always have a real actor in `audit_log`.
 - Credential submission is rate limited per IP in Postgres, not in memory.
+
+## Images
+
+Player photos and team logos live in Postgres as `bytea` and are served from
+`/api/images/<id>` with immutable caching. No object storage, no filesystem
+writes — SPEC.md §9.3 has the measurements behind that choice.
+
+The browser resizes to 800px on a canvas before uploading, so a phone sends
+~150KB instead of ~7MB and EXIF (including GPS) never reaches the database. PNG
+sources stay PNG so a logo keeps its transparency; everything else becomes JPEG.
+
+The server validates rather than re-encodes: magic bytes must match the format,
+dimensions come from the image header, and the 5MB / 2000px caps are enforced
+there. `experimental.serverActions.bodySizeLimit` is raised to 6mb in
+`next.config.js` because the 1MB default would reject a legitimate upload as a
+413 before any of that runs.
 
 ## Docker image targets
 

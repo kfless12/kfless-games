@@ -1,4 +1,5 @@
 import { sql } from 'drizzle-orm';
+import { customType } from 'drizzle-orm/pg-core';
 import {
   type AnyPgColumn,
   boolean,
@@ -13,6 +14,11 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
+
+/** Drizzle has no built-in bytea column, so declare one. Maps to Buffer. */
+const customBytea = customType<{ data: Buffer; driverData: Buffer }>({
+  dataType: () => 'bytea',
+});
 
 /*
  * Data model per SPEC.md §4.
@@ -100,7 +106,28 @@ export const players = pgTable(
       .generatedAlwaysAs(sql`(coalesce(draft_pick_number, 0) = 13)`),
 
     photoUrl: text('photo_url'),
-    profileComplete: boolean('profile_complete').notNull().default(false),
+    /*
+     * Derived, not stored — the same reasoning as isMisterIrrelevant below it.
+     * A boolean that a save handler is supposed to keep in sync is a boolean
+     * that eventually lies, and the admin's completion checklist (SPEC.md §9.1)
+     * is only useful if it is true.
+     *
+     * "Complete" means the parts that make a draft card work (SPEC.md §5.3):
+     * a photo, all eight scouting ratings, and a scouting report. The
+     * biographical fields are flavour and are not required. SPEC.md does not
+     * define this, so it is defined here.
+     */
+    profileComplete: boolean('profile_complete')
+      .notNull()
+      .generatedAlwaysAs(
+        sql`(
+          photo_url is not null
+          and beer_pong is not null and chugging is not null and flip_cup is not null
+          and endurance is not null and clutch is not null and trash_talk is not null
+          and hand_eye is not null and recovery is not null
+          and scouting_report is not null and btrim(scouting_report) <> ''
+        )`,
+      ),
 
     // Biographical. All nullable, all self-entered, all decorative.
     height: text('height'),
@@ -374,6 +401,39 @@ export const auditLog = pgTable(
   (table) => [
     index('audit_log_timestamp_idx').on(table.timestamp),
     index('audit_log_target_idx').on(table.targetType, table.targetId),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// images — SPEC.md §4.9
+//
+// Player photos and team logos, as bytes in Postgres. Bytes live in their own
+// table so that listing players never drags image data along with it.
+// ---------------------------------------------------------------------------
+
+export const images = pgTable(
+  'images',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    mimeType: text('mime_type').notNull(),
+    bytes: customBytea('bytes').notNull(),
+    byteSize: integer('byte_size').notNull(),
+    width: integer('width').notNull(),
+    height: integer('height').notNull(),
+    uploadedBy: uuid('uploaded_by').references(() => players.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    check(
+      'images_mime_type_allowed',
+      sql`${table.mimeType} in ('image/jpeg', 'image/png', 'image/webp')`,
+    ),
+    // Mirrors the caps in lib/images.ts so a bug there cannot put a huge row in.
+    check('images_byte_size_capped', sql`${table.byteSize} > 0 and ${table.byteSize} <= 5242880`),
+    check(
+      'images_dimensions_capped',
+      sql`${table.width} between 1 and 2000 and ${table.height} between 1 and 2000`,
+    ),
   ],
 );
 

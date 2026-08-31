@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useActionState, useState } from 'react';
 
 import { manageCredential } from './actions';
@@ -65,6 +66,15 @@ export function CredentialTable({ rows }: { rows: CredentialRow[] }) {
             </div>
 
             <p className="mt-1 break-all text-base text-muted">{row.email}</p>
+
+            <p className="mt-2 flex flex-wrap items-center gap-3 text-base">
+              <span className={row.profileComplete ? 'font-semibold' : 'text-muted'}>
+                {row.profileComplete ? 'Card complete' : 'Card unfinished'}
+              </span>
+              <Link href={`/admin/players/${row.id}`} className="font-bold underline">
+                Edit card
+              </Link>
+            </p>
 
             {row.joinUrl && row.joinCode ? (
               <>
