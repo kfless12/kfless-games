@@ -26,6 +26,12 @@ npm run db:seed           # 17 players, 4 teams, 17 credentials
 npm run dev               # http://localhost:3000
 ```
 
+For a database you can actually look at — 17 avatars, bios and rating lines, plus
+team logos — use `npm run db:demo` instead of `db:seed`. It is deterministic, so
+a reseed produces identical data. Placeholder profiles are deliberately **off**
+in the normal seed: at the real event an invented stat line nobody wrote is
+worse than an obviously empty card.
+
 Then open `/admin` as the seeded admin to get everyone's join link. To find the
 admin's own link before you have a session:
 
@@ -62,6 +68,7 @@ docker compose up --build
 | `npm run db:migrate` | Apply pending migrations |
 | `npm run db:seed` | Seed the roster from `scripts/seed-data.ts` |
 | `npm run db:reset` | Wipe and reseed (`SEED_RESET=1`) |
+| `npm run db:demo` | Wipe, reseed, **and** fill placeholder avatars/bios/ratings |
 | `npm run db:studio` | Drizzle Studio |
 
 ## Layout
@@ -82,6 +89,7 @@ lib/
   images.ts          upload validation: magic bytes, dimensions, caps (tested)
   upload.ts          storing an image and cleaning up a replaced one
   profile.ts         profile field list + form parsing (tested)
+  png.ts             tiny PNG encoder for the demo seed (tested)
   uuid.ts            id validation, so a bad id is a 404 not a 500
   audit.ts           append-only audit trail
   env.ts             environment access, SPEC.md §10.3
@@ -94,6 +102,7 @@ scripts/
   migrate.ts         migration runner
   seed.ts            roster seeder, validates before writing
   seed-validate.ts   roster validation (pure, tested)
+  fake-profiles.ts   deterministic placeholder avatars/bios (tested)
   seed-data.ts       THE ROSTER — replace the placeholder names here
 ```
 

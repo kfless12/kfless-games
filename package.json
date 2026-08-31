@@ -17,7 +17,8 @@
     "db:reset": "SEED_RESET=1 tsx scripts/seed.ts",
     "test": "tsx --test $(find lib scripts -name '*.test.ts' | sort)",
     "test:watch": "tsx --test --watch $(find lib scripts -name '*.test.ts' | sort)",
-    "test:unit": "tsx --test $(find lib scripts -name '*.test.ts' -not -name 'schema.test.ts' | sort)"
+    "test:unit": "tsx --test $(find lib scripts -name '*.test.ts' -not -name 'schema.test.ts' | sort)",
+    "db:demo": "SEED_RESET=1 SEED_FAKE_PROFILES=1 tsx scripts/seed.ts"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.2",

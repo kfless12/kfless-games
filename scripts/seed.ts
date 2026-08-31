@@ -7,10 +7,13 @@ import {
   auditLog,
   credentials,
   eventState,
+  images,
   players,
   teams,
 } from '../lib/db/schema';
+import { checkImage } from '../lib/images';
 import { newJoinCode, newToken } from '../lib/credentials';
+import { fakeAvatarPng, fakeProfile, fakeTeamLogoPng } from './fake-profiles';
 import { SEED_PLAYERS, SEED_TEAMS } from './seed-data';
 import { validateRoster } from './seed-validate';
 
@@ -21,6 +24,11 @@ loadEnv({ path: ['.env.local', '.env'], quiet: true });
  *
  * Refuses to run against a non-empty players table unless SEED_RESET=1, so it
  * cannot quietly wipe the real roster mid-event.
+ *
+ * SEED_FAKE_PROFILES=1 (via `npm run db:demo`) also fills in placeholder
+ * avatars, bios, and ratings so the draft board has something to show before
+ * the real people fill theirs in. Off by default: at the actual event, an
+ * invented stat line nobody wrote is worse than an obviously empty card.
  *
  * Token and code formats come from lib/credentials.ts, the same module
  * lib/auth.ts uses, so a seeded credential is indistinguishable from an
@@ -34,6 +42,73 @@ function validate() {
   console.error('scripts/seed-data.ts is not valid:');
   for (const problem of problems) console.error(`  - ${problem}`);
   process.exit(1);
+}
+
+
+type Tx = Parameters<Parameters<ReturnType<typeof drizzle>['transaction']>[0]>[0];
+
+/**
+ * Placeholder avatars, bios, and ratings. Every generated PNG goes through the
+ * same checkImage() the upload route uses, so a bug in lib/png.ts fails the seed
+ * loudly instead of putting an unservable row in the images table.
+ */
+async function fillFakeProfiles(
+  tx: Tx,
+  insertedPlayers: { id: string; email: string }[],
+  insertedTeams: { id: string; captainId: string }[],
+) {
+  for (const player of insertedPlayers) {
+    const png = fakeAvatarPng(player.email);
+    const check = checkImage(png);
+    if (!check.ok) throw new Error(`generated avatar rejected: ${check.reason}`);
+
+    const [image] = await tx
+      .insert(images)
+      .values({
+        mimeType: check.info.mimeType,
+        bytes: png,
+        byteSize: png.length,
+        width: check.info.width,
+        height: check.info.height,
+        uploadedBy: player.id,
+      })
+      .returning({ id: images.id });
+
+    await tx
+      .update(players)
+      .set({ ...fakeProfile(player.email), photoUrl: `/api/images/${image.id}` })
+      .where(eq(players.id, player.id));
+  }
+
+  for (const team of insertedTeams) {
+    const [current] = await tx
+      .select({ name: teams.name, colorHex: teams.colorHex })
+      .from(teams)
+      .where(eq(teams.id, team.id))
+      .limit(1);
+
+    const png = fakeTeamLogoPng(current.name, current.colorHex);
+    const check = checkImage(png);
+    if (!check.ok) throw new Error(`generated logo rejected: ${check.reason}`);
+
+    const [image] = await tx
+      .insert(images)
+      .values({
+        mimeType: check.info.mimeType,
+        bytes: png,
+        byteSize: png.length,
+        width: check.info.width,
+        height: check.info.height,
+        uploadedBy: team.captainId,
+      })
+      .returning({ id: images.id });
+
+    await tx.update(teams).set({ logoUrl: `/api/images/${image.id}` }).where(eq(teams.id, team.id));
+  }
+
+  console.log(
+    `filled ${insertedPlayers.length} placeholder profiles and ${insertedTeams.length} team logos`,
+  );
 }
 
 async function main() {
@@ -65,6 +140,9 @@ async function main() {
         console.log(`SEED_RESET=1 — clearing ${count} existing player(s) and all teams`);
         await tx.delete(auditLog);
         await tx.delete(credentials);
+        await tx.update(players).set({ photoUrl: null });
+        await tx.update(teams).set({ logoUrl: null });
+        await tx.delete(images);
         await tx.update(players).set({ teamId: null });
         await tx.delete(teams);
         await tx.delete(players);
@@ -116,6 +194,10 @@ async function main() {
       });
       await tx.insert(credentials).values(credentialRows);
 
+      if (process.env.SEED_FAKE_PROFILES === '1') {
+        await fillFakeProfiles(tx, insertedPlayers, insertedTeams);
+      }
+
       await tx
         .insert(eventState)
         .values({ id: 1 })
@@ -140,6 +222,8 @@ async function main() {
         admins: sql<number>`(select count(*)::int from players where is_admin)`,
         teams: sql<number>`(select count(*)::int from teams)`,
         credentials: sql<number>`(select count(*)::int from credentials where revoked_at is null)`,
+        images: sql<number>`(select count(*)::int from images)`,
+        profilesComplete: sql<number>`(select count(*)::int from players where profile_complete)`,
       })
       .from(sql`(select 1) as one`);
 
