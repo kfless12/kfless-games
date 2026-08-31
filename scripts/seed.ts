@@ -198,10 +198,15 @@ async function main() {
         await fillFakeProfiles(tx, insertedPlayers, insertedTeams);
       }
 
+      // Reset the draft too. onConflictDoNothing would leave a half-finished
+      // draft from a previous run pointing at players that no longer exist.
       await tx
         .insert(eventState)
-        .values({ id: 1 })
-        .onConflictDoNothing();
+        .values({ id: 1, draftStatus: 'NOT_STARTED', draftPaused: false })
+        .onConflictDoUpdate({
+          target: eventState.id,
+          set: { draftStatus: 'NOT_STARTED', draftPaused: false, updatedAt: new Date() },
+        });
 
       await tx.insert(auditLog).values({
         action: 'seed.roster',
@@ -224,6 +229,7 @@ async function main() {
         credentials: sql<number>`(select count(*)::int from credentials where revoked_at is null)`,
         images: sql<number>`(select count(*)::int from images)`,
         profilesComplete: sql<number>`(select count(*)::int from players where profile_complete)`,
+        draftStatus: sql<string>`(select draft_status from event_state where id = 1)`,
       })
       .from(sql`(select 1) as one`);
 

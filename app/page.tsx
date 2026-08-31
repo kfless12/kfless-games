@@ -108,6 +108,12 @@ export default async function Home() {
             >
               {me.profileComplete ? 'Edit my card' : 'Finish my card'}
             </Link>
+            <Link
+              href="/draft"
+              className="flex h-11 items-center rounded-lg border-2 border-ink px-4 text-base font-bold"
+            >
+              Draft board
+            </Link>
             {isAdmin(identity) && (
               <Link
                 href="/admin"
@@ -132,12 +138,20 @@ export default async function Home() {
             You&apos;re not signed in. Everything below is public; your own card and the draft
             need your link.
           </p>
-          <Link
-            href="/join"
-            className="mt-4 flex h-14 w-full items-center justify-center rounded-lg bg-ink text-lg font-bold text-paper"
-          >
-            Sign in
-          </Link>
+          <div className="mt-4 flex flex-col gap-2">
+            <Link
+              href="/join"
+              className="flex h-14 w-full items-center justify-center rounded-lg bg-ink text-lg font-bold text-paper"
+            >
+              Sign in
+            </Link>
+            <Link
+              href="/draft"
+              className="flex h-12 w-full items-center justify-center rounded-lg border-2 border-ink text-base font-bold"
+            >
+              Watch the draft
+            </Link>
+          </div>
         </section>
       )}
 
@@ -174,8 +188,7 @@ export default async function Home() {
           ))}
         </ul>
         <p className="text-base text-muted">
-          {undrafted.length} player{undrafted.length === 1 ? '' : 's'} still in the pool. The
-          draft opens in Phase 3.
+          {undrafted.length} player{undrafted.length === 1 ? '' : 's'} still in the pool.
         </p>
       </section>
     </Shell>
@@ -186,7 +199,7 @@ function Shell({ children }: { children: React.ReactNode }) {
   return (
     <main className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-6 px-5 py-10">
       <header>
-        <p className="text-sm font-bold uppercase tracking-widest text-muted">Phase 2</p>
+        <p className="text-sm font-bold uppercase tracking-widest text-muted">Phase 3</p>
         <h1 className="mt-1 text-4xl font-black tracking-tight">kfless games</h1>
       </header>
       {children}

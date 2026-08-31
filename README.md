@@ -5,7 +5,7 @@ online snake draft, and a tournament engine with a live "up next" queue.
 
 `SPEC.md` is the source of truth. `CLAUDE.md` holds the working rules.
 
-**Status: Phase 2 (profiles and teams) complete.** Build order is SPEC.md §14.
+**Status: Phase 3 (the draft) complete.** Build order is SPEC.md §14.
 
 ## Stack
 
@@ -76,6 +76,7 @@ docker compose up --build
 ```
 app/                 routes (App Router)
   page.tsx           landing page
+  draft/             draft board, picks, admin controls, 5s polling
   me/                self-service profile + captain team editing
   join/              magic link redemption + 6-digit code entry
   admin/             gated admin console, credential list, edit any card
@@ -91,6 +92,8 @@ lib/
   profile.ts         profile field list + form parsing (tested)
   png.ts             tiny PNG encoder for the demo seed (tested)
   uuid.ts            id validation, so a bad id is a 404 not a 500
+  draft.ts           snake order + pick authorization (pure, tested)
+  draft-state.ts     everything the draft board reads, in one query
   audit.ts           append-only audit trail
   env.ts             environment access, SPEC.md §10.3
   db/
@@ -134,6 +137,25 @@ Per-person magic links with a 6-digit day-of fallback (SPEC.md §3.2).
 - `ADMIN_CREDENTIAL` is break-glass only: it elevates an **already identified**
   person, so admin actions always have a real actor in `audit_log`.
 - Credential submission is rate limited per IP in Postgres, not in memory.
+
+## The draft
+
+Snake order per SPEC.md §1.1: 13 picks over 4 teams, and position 4 takes pick
+13 and ends with 5 players. That is intentional and self-balancing — do not
+"fix" it. Pick 13 is permanently Mister Irrelevant, enforced by a generated
+column so it cannot be edited away and clears itself if the pick is undone.
+
+There is no clock, no auto-pick, and no draft-order randomizer (SPEC.md §12).
+
+Every mutation takes a row lock on `event_state` first, so two captains tapping
+DRAFT at the same instant cannot both claim the same pick number. Claiming a
+player is a conditional UPDATE, so the database decides whether they were still
+available, not a prior read.
+
+`lib/draft.ts` holds the order maths and the pick authorization as pure
+functions, so both are unit tested rather than only reachable through a request.
+`app/draft/actions.ts` re-checks every rule server-side — SPEC.md §5.2 is
+explicit that the UI is not the control.
 
 ## Images
 
