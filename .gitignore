@@ -42,3 +42,8 @@ next-env.d.ts
 
 # committed template, actual .env files stay ignored above
 !.env.example
+
+# Cloudflare Workers demo — TEMPORARY, SPEC.md §16
+.open-next/
+.wrangler/
+.dev.vars

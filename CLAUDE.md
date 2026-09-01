@@ -42,6 +42,13 @@ Next.js App Router · TypeScript · Tailwind · PostgreSQL · Drizzle · Docker.
 
 `output: 'standalone'` must stay set in `next.config.js`.
 
+**There is a temporary Cloudflare Workers demo host — SPEC.md §16.** It is built
+to be deleted and it does not resolve §15.4. Everything it touches is marked
+`TEMPORARY — SPEC.md §16` in a comment, and §16.4 is the revert checklist. Do
+not build on it, do not extend it, and do not treat Workers as a constraint when
+writing application code: the container path is the real one. If a task would
+make the Workers branch load-bearing, stop and ask.
+
 Local dev runs against the Postgres in `docker-compose.yml`. Run migrations and tests against it rather than reasoning about the schema abstractly.
 
 ## Testing

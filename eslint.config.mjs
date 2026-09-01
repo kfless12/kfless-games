@@ -23,6 +23,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Generated Worker bundle — TEMPORARY, SPEC.md §16. Without this, eslint
+    // walks the whole traced node_modules copy inside it.
+    ".open-next/**",
+    ".wrangler/**",
   ]),
 ]);
 

@@ -16,6 +16,19 @@ const nextConfig = {
 
   turbopack: { root: __dirname },
   outputFileTracingRoot: __dirname,
+
+  // TEMPORARY — SPEC.md §16, the Cloudflare Workers demo. Remove with that
+  // phase.
+  //
+  // `pg` reaches Postgres from a Worker through pg-cloudflare, whose real
+  // implementation sits behind the `workerd` export condition. Next's file
+  // tracer only follows the `default` condition, which points at dist/empty.js,
+  // so without this the traced bundle contains the stub and the Worker build
+  // fails to resolve dist/index.js. Harmless on the container path: it copies
+  // two files nothing there imports.
+  outputFileTracingIncludes: {
+    '**': ['./node_modules/pg-cloudflare/dist/**', './node_modules/pg-cloudflare/esm/**'],
+  },
 };
 
 module.exports = nextConfig;

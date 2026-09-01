@@ -7,6 +7,10 @@ online snake draft, and a tournament engine with a live "up next" queue.
 
 **Status: Phase 7 (polish) complete.** Build order is SPEC.md §14.
 
+A throwaway Cloudflare Workers demo also exists (SPEC.md §16) so the app can be
+shared before the real host is picked. It is built to be deleted — see
+[Temporary: the Cloudflare demo](#temporary-the-cloudflare-demo).
+
 ## Stack
 
 Next.js 16 (App Router) · TypeScript · Tailwind v4 · PostgreSQL 17 · Drizzle · Docker
@@ -71,6 +75,9 @@ docker compose up --build
 | `npm run db:demo` | Wipe, reseed, **and** fill placeholder avatars/bios/ratings |
 | `npm run db:dry-run` | A completed draft **plus** a played-out 3-day event, for looking at the UI |
 | `npm run db:studio` | Drizzle Studio |
+| `npm run cf:build` | Build the Cloudflare Worker (temporary, SPEC.md §16) |
+| `npm run cf:preview` | Build and run the Worker locally in `workerd` |
+| `npm run cf:deploy` | Build and deploy the Worker (needs Node 22+) |
 
 ## Layout
 
@@ -372,6 +379,95 @@ dimensions come from the image header, and the 5MB / 2000px caps are enforced
 there. `experimental.serverActions.bodySizeLimit` is raised to 6mb in
 `next.config.js` because the 1MB default would reject a legitimate upload as a
 413 before any of that runs.
+
+## Temporary: the Cloudflare demo
+
+**This is disposable.** SPEC.md §16 is the spec, including the revert checklist.
+It does not resolve SPEC.md §15.4, and it is not a candidate for running the
+event — the `Dockerfile` already runs anywhere, and Cloudflare is the one host
+that needs application changes to work at all.
+
+Three pieces, only one of them Cloudflare's:
+
+1. **Workers** runs the app, built by `@opennextjs/cloudflare`.
+2. **A Postgres somewhere else** — Workers has no database.
+3. **Migrations and seeding run from your laptop** against that database. No
+   change to anything in `scripts/`.
+
+### Prerequisites
+
+- Node **22+** locally. Wrangler refuses to run on Node 20.
+- A Cloudflare account (`npx wrangler login`).
+- A Postgres with a **pooling** endpoint. On Neon that is the `-pooler` host.
+  This is required, not a preference: see below.
+
+### Deploy
+
+```bash
+nvm use 22
+npx wrangler login
+```
+
+Push the three secrets. Generate **fresh** ones — do not reuse `.env`, which is
+for a database on your laptop:
+
+```bash
+npx wrangler secret put DATABASE_URL
+npx wrangler secret put SESSION_SECRET
+npx wrangler secret put ADMIN_CREDENTIAL
+```
+
+Migrate and seed the remote database from your machine, then deploy:
+
+```bash
+DATABASE_URL='<direct, non-pooling url>' npm run db:migrate
+DATABASE_URL='<direct, non-pooling url>' npm run db:demo
+DATABASE_URL='<direct, non-pooling url>' npm run db:dry-run
+npm run cf:deploy
+```
+
+Use the **direct** (non-pooling) URL for migrations and seeding, and the
+**pooling** URL for the Worker secret. Then get the admin's join link:
+
+```bash
+DATABASE_URL='<direct url>' docker compose exec -T db psql "$DATABASE_URL" -tAc "select '/join/'||c.token from credentials c join players p on p.id=c.player_id where p.is_admin and c.revoked_at is null"
+```
+
+To try it locally in `workerd` first, copy `.dev.vars.example` to `.dev.vars`
+and run `npm run cf:preview`.
+
+### What friends can see without signing in
+
+SPEC.md §3.4 makes the app publicly readable with no cookie, so the bare URL is
+enough to browse standings, brackets, the draft board and rosters. A magic link
+is only needed to *do* anything — pick, start a match, or report a score. Send
+the URL, not a link, unless you want someone acting as a specific player.
+
+### Why the pooling endpoint is mandatory
+
+Workers gives every request its own I/O context, and a socket opened for one
+request may not be used by the next. A module-level `pg.Pool` that survives
+between requests fails with "Cannot perform I/O on behalf of a different
+request", so on Workers `lib/db/index.ts` builds a fresh single-connection pool
+per `getDb()`. Connection reuse has to happen on the Postgres side instead.
+
+Transaction-mode pooling is safe here: the only two row locks in the app
+(`app/draft/actions.ts`, `lib/engine/submit.ts`) are both taken inside a
+transaction, so they stay on one server connection for their whole life. That
+was verified in `workerd`, not assumed — an admin undo of the beer pong grand
+final committed correctly through a `select … for update`, cascading
+`game_results` from 8 to 0 and reopening the game.
+
+Hyperdrive is deliberately not used: its query cache defaults to a 60-second
+TTL, and this app polls every 5–10 seconds and derives standings and the queue
+at read time, so it would serve stale data. No R2 either — SPEC.md §12 rejects
+it, and with every route `force-dynamic` there is nothing to cache.
+
+### Costs and limits
+
+The Worker bundles to **1.54 MB gzipped**, inside the 3 MB Workers Free limit,
+so this fits the free plan. The Postgres provider is the part likely to have a
+free-tier expiry — check before relying on the link staying up.
 
 ## Docker image targets
 

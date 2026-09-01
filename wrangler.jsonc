@@ -1,0 +1,34 @@
+/**
+ * TEMPORARY — SPEC.md §16. The Cloudflare Workers demo host, so the app can be
+ * poked at by friends before the real host is chosen. SPEC.md §15.4 is still
+ * open; delete this file along with the rest of that phase.
+ */
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "kfless-games",
+  "main": ".open-next/worker.js",
+
+  // nodejs_compat is what lets `pg` open a TCP socket to Postgres at all.
+  "compatibility_date": "2025-09-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "services": [
+    {
+      "binding": "WORKER_SELF_REFERENCE",
+      "service": "kfless-games"
+    }
+  ],
+
+  // Switches lib/db/index.ts to a per-request pool. See the comment there.
+  "vars": {
+    "WORKERS_RUNTIME": "1"
+  },
+
+  "observability": {
+    "enabled": true
+  }
+}

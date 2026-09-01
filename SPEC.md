@@ -456,6 +456,10 @@ These are what keep every host viable:
 That is the whole list. There is deliberately no object storage configuration —
 see §9.3.
 
+One temporary exception: the Cloudflare demo in §16 adds `WORKERS_RUNTIME`,
+which selects the per-request database pool that Workers requires. It is not
+read by anything on the permanent container path and goes away with §16.
+
 ---
 
 ## 11. UI
@@ -533,6 +537,12 @@ get tests, and UI does not.
 
 **Phase 7 — Polish.** Styling, logos, bracket layout on mobile, empty states, a dry run with fake results across all three days.
 
+**Phase 8 — Temporary demo deployment (Cloudflare Workers).** Not part of the
+event build. A throwaway host so the app can be shared and poked at before the
+real host is chosen. Everything it adds is listed in §16 with a revert
+checklist, because it is the one thing in this project built to be deleted.
+This phase does **not** resolve §15.4.
+
 ---
 
 ## 15. Open decisions
@@ -551,4 +561,97 @@ get tests, and UI does not.
    the go, per §4.3. Only beer pong is fixed (`DOUBLE_ELIM`, 2 entries per
    team, spans all 3 days). Each game's `points_matrix` is set when the game is
    created, so no game list needs to exist in advance.
-4. **Host** — DO App Platform vs. DO Droplet. Does not affect application code.
+4. **Host** — DO App Platform vs. DO Droplet. **Still open.** Neither option
+   affects application code; both run the `runner` image from the `Dockerfile`
+   as-is.
+
+   A Cloudflare Workers deployment exists as a temporary demo host (§16) and
+   does **not** resolve this. Cloudflare is the one host considered that *does*
+   affect application code — it cannot run the container, and Workers' request
+   isolation forbids reusing a database connection pool across requests — which
+   is exactly why §16 is scoped as disposable rather than folded into the
+   permanent stack. Choosing the real host means deleting §16, not building on
+   it.
+
+---
+
+## 16. Temporary: the Cloudflare Workers demo
+
+**Status: temporary. Delete this whole section and everything it lists when
+§15.4 is decided.**
+
+### 16.1 Why it exists
+
+To put a working link in front of friends before the event, with the seeded
+demo data, while §15.4 is still open. It is a demo host, not a candidate for
+the real one: there is no reason to run the event off it when the `Dockerfile`
+already runs anywhere.
+
+### 16.2 What it is
+
+Three pieces, only one of which is Cloudflare's:
+
+- **Cloudflare Workers** runs the app, built by `@opennextjs/cloudflare`.
+- **A Postgres somewhere else** — Workers has no database. Any provider works;
+  `DATABASE_URL` must point at a **pooling** endpoint (see 16.3).
+- Migrations and seeding run from a laptop against that database directly, not
+  from the Worker. Nothing about `scripts/` changes.
+
+No R2 bucket, and no incremental cache configured. That is deliberate: §12
+rejects R2, and every route here is `force-dynamic` because standings, the
+queue and the draft are derived at read time, so there is nothing to cache.
+
+### 16.3 The one real code change
+
+Workers gives every request its own I/O context, and a socket opened for one
+request may not be used by the next — a module-level pool that survives between
+requests fails with "Cannot perform I/O on behalf of a different request". So
+`lib/db/index.ts` gains a branch, behind `WORKERS_RUNTIME=1`, that builds a
+fresh single-connection pool per `getDb()` and lets `pg` open the socket lazily
+on the first query.
+
+Connection reuse therefore has to happen on the Postgres side, which is why
+`DATABASE_URL` must be a pooling endpoint. Transaction-mode pooling is fine:
+the two row locks this app takes (`app/draft/actions.ts`,
+`lib/engine/submit.ts`) are both inside a transaction, so they stay on one
+server connection for their whole life. This was verified, not assumed — see
+16.5.
+
+Hyperdrive is deliberately **not** used. It would remove the need for a pooling
+endpoint, but its query cache is on by default with a 60-second TTL, and this
+app polls every 5–10 seconds and derives everything at read time, so a 60-second
+read cache would show stale standings and a stale queue.
+
+### 16.4 Revert checklist
+
+Delete, in any order:
+
+- `wrangler.jsonc`, `open-next.config.ts`, `.dev.vars.example`
+- the `WORKERS_RUNTIME` branch in `lib/db/index.ts` (`onWorkers`, `workersDb`,
+  and the branch in `getDb`)
+- `outputFileTracingIncludes` in `next.config.js`
+- the `cf:build` / `cf:preview` / `cf:deploy` scripts and the
+  `@opennextjs/cloudflare` and `wrangler` devDependencies in `package.json`
+- the `.open-next/`, `.wrangler/`, `.dev.vars` entries in `.gitignore`
+- the `WORKERS_RUNTIME` paragraph in §10.3, Phase 8 in §14, the §16 reference
+  in §15.4, the README section, and this section
+
+Nothing on the container path reads any of it. `output: 'standalone'` is
+untouched, `npm run build`, `npm start`, the `Dockerfile` and `docker-compose`
+all behave exactly as before, and `npm test` does not know this section exists.
+
+### 16.5 What was verified
+
+Built and run locally in `workerd` against the compose Postgres:
+
+- Worker bundle 1.54 MB gzipped, inside the 3 MB Workers Free limit.
+- `pg` reached Postgres over TCP from `workerd`: `/api/health` returned
+  PostgreSQL 17.11, 13 tables, 17 players.
+- `/`, `/queue`, `/games`, `/draft` and `/admin` all rendered.
+- A magic link signed in, and an admin undo of the beer pong grand final
+  committed through an interactive transaction holding a `select … for update`:
+  `game_results` 8 → 0, complete matches 14 → 13, game `COMPLETE` → `ACTIVE`,
+  with a `result.undo` row in `audit_log` attributed to the right actor.
+
+The Worker was never deployed to Cloudflare — that needs an account, and the
+account holder should run it.
