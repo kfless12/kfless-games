@@ -127,7 +127,7 @@ No points column. Points are always computed.
 | `id` | |
 | `name` | e.g. "Beer Pong" |
 | `rules` | markdown text |
-| `format` | `DOUBLE_ELIM` \| `ROUND_ROBIN` \| `RANKED_FFA` |
+| `format` | `DOUBLE_ELIM` \| `SINGLE_ELIM` \| `ROUND_ROBIN` \| `RANKED_FFA` |
 | `entries_per_team` | int, default 1. Beer pong = 2. |
 | `entry_size` | int null — players per entry, informational only (beer pong = 2) |
 | `points_matrix` | jsonb, placement → points, e.g. `{"1":100,"2":70,"3":50,"4":30}` |
@@ -242,7 +242,7 @@ On transition to `COMPLETE`, set `is_mister_irrelevant` on pick 13.
 
 ## 6. Tournament engine
 
-Three formats. Each is a generator plus a result handler.
+Four formats. Each is a generator plus a result handler.
 
 ### 6.1 `DOUBLE_ELIM`
 
@@ -262,20 +262,36 @@ This is the key design choice. Because the graph is fully built in advance, repo
 
 **Placement.** Final placements derive from elimination order: last remaining = 1st, grand final loser = 2nd, and so on down through the losers bracket.
 
-### 6.2 `ROUND_ROBIN`
+### 6.2 `SINGLE_ELIM`
+
+The winners bracket of §6.1 with the loser routing removed. Same pre-generated
+skeleton, same pointers, same bye handling, same readiness rule — a loser is
+simply eliminated rather than dropped into a losers bracket, and there is no
+grand final reset.
+
+Added so that flip cup's format can be chosen in the admin console at
+configuration time rather than in code (§15.2).
+
+**Placement.** Derived from the round in which an entry was eliminated: the
+winner is 1st, the final's loser is 2nd, then the semi-final losers, and so on.
+Entries eliminated in the same round are ordered by seed, so placements are a
+unique 1..N and every rung of `points_matrix` stays meaningful. SPEC.md does not
+otherwise say how to rank co-eliminated entries; this is the rule.
+
+### 6.3 `ROUND_ROBIN`
 
 - Every entry plays every other entry once. With 4 entries: 6 matches.
 - Standings table: Wins, Losses, Cup/Point Differential.
 - Tie-breakers in order: (1) head-to-head record, (2) differential, (3) coin flip prompt shown to the admin.
 - Placement = standings order.
 
-### 6.3 `RANKED_FFA`
+### 6.4 `RANKED_FFA`
 
 - All entries compete simultaneously. One heat by default; the model supports multiple heats but V1 UI need only handle one.
 - Admin assigns placement 1..N via a drag-to-reorder list.
 - Optional `raw_score` per entry (a time, a count) shown alongside but not used for ordering.
 
-### 6.4 Scoring
+### 6.5 Scoring
 
 When a game is marked `COMPLETE`:
 
@@ -498,6 +514,13 @@ get tests, and UI does not.
    ADMIN comes from a `players.is_admin` flag, so the admin's own magic link
    grants it; `ADMIN_CREDENTIAL` remains as a break-glass elevation for an
    already-identified person, which keeps `audit_log.actor_person_id` populated.
-2. **Flip cup format** — round robin or double elimination.
-3. **Remaining game list** and each game's `points_matrix`.
+2. ~~**Flip cup format**~~ — RESOLVED as a runtime choice, not a build-time
+   one. Flip cup runs with 4 entries and may be round robin, single
+   elimination, or double elimination; the call gets made in the admin console
+   when the game is configured. `SINGLE_ELIM` was added to §4.3 and §6.2 so all
+   three are actually available.
+3. ~~**Remaining game list**~~ — RESOLVED: games are admin-managed and added on
+   the go, per §4.3. Only beer pong is fixed (`DOUBLE_ELIM`, 2 entries per
+   team, spans all 3 days). Each game's `points_matrix` is set when the game is
+   created, so no game list needs to exist in advance.
 4. **Host** — DO App Platform vs. DO Droplet. Does not affect application code.
