@@ -2,8 +2,9 @@
 
 import { useActionState, useState } from 'react';
 
-import { submitResult, undoResult } from './actions';
+import { undoResult } from './actions';
 import { emptyResultState, type ResultState } from './state';
+import { usePendingSubmit } from './use-pending-submit';
 
 export type MatchSide = {
   entryId: string | null;
@@ -40,9 +41,13 @@ export function MatchCard({
   canReport: boolean;
   label: string;
 }) {
-  const [state, formAction, pending] = useActionState<ResultState, FormData>(
-    submitResult,
-    emptyResultState,
+  /*
+   * Result entry goes through the pending queue rather than straight at the
+   * server, so a dropped request is retried and the badge stays up until it
+   * lands. SPEC.md §8.
+   */
+  const { pending, rejected, saving, submit, retryNow, nextRetryInMs } = usePendingSubmit(
+    match.id,
   );
   const [undoState, undoAction, undoPending] = useActionState<ResultState, FormData>(
     undoResult,
@@ -52,7 +57,26 @@ export function MatchCard({
 
   const complete = match.status === 'COMPLETE';
   const playable = match.sides.every((side) => side.entryId !== null);
-  const message = state.error ?? undoState.error ?? state.notice ?? undoState.notice;
+  const message = rejected ?? undoState.error ?? undoState.notice;
+
+  function onSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+
+    const winnerEntryId = String(formData.get('winnerEntryId') ?? '');
+    if (!winnerEntryId) return;
+
+    const scores: Record<string, number> = {};
+    for (const [key, value] of formData.entries()) {
+      if (!key.startsWith('score-')) continue;
+      const raw = String(value).trim();
+      if (!/^\d+$/.test(raw)) continue;
+      scores[key.slice('score-'.length)] = Number(raw);
+    }
+
+    submit({ matchId: match.id, winnerEntryId, scores });
+    setEditing(false);
+  }
 
   return (
     <li className="flex flex-col gap-3 rounded-lg border-2 border-rule p-4">
@@ -89,6 +113,35 @@ export function MatchCard({
         ))}
       </ul>
 
+      {/*
+        SPEC.md §8: a persistent badge until the result actually lands. It says
+        how many tries it has had, so a long silence reads as a connection
+        problem rather than as the app having eaten the score.
+      */}
+      {pending && (
+        <div
+          role="status"
+          className="flex flex-col gap-2 rounded-lg border-2 border-ink bg-ink p-3 text-paper"
+        >
+          <p className="text-base font-bold">
+            Not saved yet — will keep trying
+            {pending.attempts > 0 && ` (${pending.attempts} ${pending.attempts === 1 ? 'try' : 'tries'})`}
+          </p>
+          <p className="text-sm">
+            {pending.lastError ?? 'Sending…'}
+            {pending.attempts > 0 && nextRetryInMs > 0 &&
+              ` · retrying every ${Math.round(nextRetryInMs / 1000)}s`}
+          </p>
+          <button
+            type="button"
+            onClick={retryNow}
+            className="h-10 rounded-lg bg-paper text-sm font-bold text-ink"
+          >
+            Try now
+          </button>
+        </div>
+      )}
+
       {message && (
         <p role="status" className="rounded-lg border-2 border-rule p-3 text-base font-semibold">
           {message}
@@ -96,7 +149,7 @@ export function MatchCard({
       )}
 
       {canReport && playable && (complete ? editing : true) && (
-        <form action={formAction} className="flex flex-col gap-3 border-t-2 border-rule pt-3">
+        <form onSubmit={onSubmit} className="flex flex-col gap-3 border-t-2 border-rule pt-3">
           <input type="hidden" name="matchId" value={match.id} />
 
           <fieldset className="flex flex-col gap-2">
@@ -132,10 +185,10 @@ export function MatchCard({
           <div className="flex flex-wrap gap-2">
             <button
               type="submit"
-              disabled={pending}
+              disabled={saving}
               className="h-12 flex-1 rounded-lg bg-ink text-base font-bold text-paper disabled:opacity-50"
             >
-              {pending ? 'Saving…' : complete ? 'Save change' : 'Save result'}
+              {saving ? 'Saving…' : complete ? 'Save change' : 'Save result'}
             </button>
             {complete && (
               <button

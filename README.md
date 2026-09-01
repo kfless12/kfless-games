@@ -5,7 +5,7 @@ online snake draft, and a tournament engine with a live "up next" queue.
 
 `SPEC.md` is the source of truth. `CLAUDE.md` holds the working rules.
 
-**Status: Phase 5 (scoring, editing, undo) complete.** Build order is SPEC.md §14.
+**Status: Phase 6 (queue and dashboard) complete.** Build order is SPEC.md §14.
 
 ## Stack
 
@@ -75,7 +75,10 @@ docker compose up --build
 
 ```
 app/                 routes (App Router)
-  page.tsx           landing page
+  page.tsx           the player dashboard (§7.2)
+  queue/             all stations, start/bump controls
+  poller.tsx         shared 10s poller with a reconnecting state
+  api/pulse/         reachability check the poller can fail against
   draft/             draft board, picks, admin controls, 5s polling
   games/             standings, per-game match list, result entry
   admin/games/       create/edit games, build and clear brackets
@@ -98,6 +101,9 @@ lib/
   draft-state.ts     everything the draft board reads, in one query
   games.ts           game config + points matrix parsing (pure, tested)
   scoring.ts         the leaderboard and §6.5 tie-breakers (pure, tested)
+  queue.ts           station queues, "you're up", start rules (pure, tested)
+  queue-db.ts        loads the queue in one pass
+  pending-results.ts the localStorage retry queue (pure, tested)
   engine/
     seeding.ts       bracket order, same-team separation, byes
     bracket.ts       the full skeleton with every pointer wired
@@ -151,6 +157,48 @@ Per-person magic links with a 6-digit day-of fallback (SPEC.md §3.2).
 - `ADMIN_CREDENTIAL` is break-glass only: it elevates an **already identified**
   person, so admin actions always have a real actor in `audit_log`.
 - Credential submission is rate limited per IP in Postgres, not in memory.
+
+## The queue and dashboard
+
+The queue derives itself (SPEC.md §7.1) — nothing is stored except the one
+manual override. Each station gets now playing / on deck / in the hole from the
+match rows, so submitting a result advances the queue with no extra work: the
+completed match drops out and newly-`READY` matches appear.
+
+Only the match on deck can be started, and only when its station is free. §7.1
+has now-playing as *the first match at each station*, so without that rule
+tapping start on something further back would quietly promote it past another
+team's game. To play out of order: bump it (admin only, audited), then start it.
+
+Starting a match is open to the admin **or a captain playing in it** — §7.1 names
+the admin, but the same reasoning §8 gives for distributing result submission
+applies to tapping start.
+
+`/` is the dashboard: the "you're up" banner with the station name, your next
+matches across all games and days, the live queue, and a standings snapshot.
+
+Polling is 10s on the dashboard and queue, 5s on the draft, and refetches
+immediately on `visibilitychange` — phones suspend background tabs, and §7.3
+calls that the most likely real-world bug in the app. Each tick pings
+`/api/pulse` first, because `router.refresh()` cannot fail visibly and a page
+going quietly stale is worse than an honest "reconnecting".
+
+## Score entry that survives a dropped request
+
+SPEC.md §8. A submission is written to `localStorage` before it is sent, retried
+with backoff while the page is open, and a "not saved yet" badge stays up until
+it lands — surviving a reload, because the queue is in storage rather than in
+component state.
+
+There is one store for the whole page, not one per match card: a bracket page
+renders fifteen cards, and giving each its own queue and timer would have fifteen
+timers racing to send the same entries.
+
+A server *rejection* stops rather than retrying — "not your match" will never
+succeed on a retry, and hiding it behind a permanent badge would be worse than
+saying so. Only transport failures retry. No service worker or background sync;
+SPEC.md §12 rejects those, partly because Safari has never implemented
+Background Sync.
 
 ## Scoring, editing and undo
 
