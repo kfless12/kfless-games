@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
-import { identify } from '@/lib/auth';
+import { canActForTeam, identify } from '@/lib/auth';
 import { getDb } from '@/lib/db';
 import { players, teams } from '@/lib/db/schema';
 import { RATING_FIELDS, TEXT_FIELDS } from '@/lib/profile';
@@ -39,7 +39,14 @@ export default async function MePage() {
   values.personalRecordBeers = me.personalRecordBeers;
   values.scoutingReport = me.scoutingReport;
 
-  const canEditTeam = team && identity.role === 'CAPTAIN' && team.captainId === identity.personId;
+  /*
+   * canActForTeam, not a role comparison. resolveRole returns ADMIN for anyone
+   * with is_admin, so an admin who is also a captain never equals 'CAPTAIN' and
+   * silently lost the team form — exactly the trap CLAUDE.md invariant 5 and
+   * the note in lib/session.ts warn about. The helper is the only thing that
+   * knows ADMIN sits above CAPTAIN.
+   */
+  const canEditTeam = team ? canActForTeam(identity, team.id) : false;
 
   return (
     <main className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-6 px-4 py-6">

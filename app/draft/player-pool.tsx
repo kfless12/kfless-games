@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useActionState, useMemo, useState } from 'react';
 
 import type { DraftPlayer } from '@/lib/draft-state';
@@ -129,7 +130,11 @@ export function PlayerPool({
               )}
 
               <div className="min-w-0 flex-1">
-                <p className="text-lg font-black leading-tight">{player.fullName}</p>
+                <p className="text-lg font-black leading-tight">
+                  <Link href={`/players/${player.id}`} className="underline">
+                    {player.fullName}
+                  </Link>
+                </p>
                 {player.nickname && (
                   <p className="text-base text-muted">&ldquo;{player.nickname}&rdquo;</p>
                 )}

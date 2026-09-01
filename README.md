@@ -91,8 +91,12 @@ app/                 routes (App Router)
   poller.tsx         shared 10s poller with a reconnecting state
   api/pulse/         reachability check the poller can fail against
   draft/             draft board, picks, admin controls, 5s polling
-  games/             standings, per-game match list, result entry
+  games/             the games list, per-game match list, result entry
   games/bracket-view.tsx  the bracket, horizontally scrolled (§11)
+  standings/         the leaderboard, every team a link to its profile
+  teams/[id]/        team profile: identity, position, roster (§9.4)
+  players/[id]/      a player's draft card, read-only and public (§9.4)
+  player-card.tsx    the read-only card, shared by both profile views
   admin/games/       create/edit games, build and clear brackets
   me/                self-service profile + captain team editing
   join/              magic link redemption + 6-digit code entry
@@ -236,6 +240,40 @@ Per-person magic links with a 6-digit day-of fallback (SPEC.md §3.2).
 - `ADMIN_CREDENTIAL` is break-glass only: it elevates an **already identified**
   person, so admin actions always have a real actor in `audit_log`.
 - Credential submission is rate limited per IP in Postgres, not in memory.
+
+## Navigation and profiles
+
+SPEC.md §11's bottom nav is **five items**: Queue · Games · Standings · Draft ·
+Me. It was four, with "Games & Standings" sharing a slot — in practice the
+leaderboard sat on top and the games list underneath it, so the games were
+buried under the table. "Who is winning" and "what is being played" are
+different questions and now get a tab each. Five still clears the 44px tap
+target at 390px, at 78px each.
+
+Everything is tappable through to a profile (SPEC.md §9.4), all of it public per
+§3.4:
+
+- **Standings** → tap a team → its profile: logo, motto, position, points per
+  game, and the roster → tap a player → their draft card.
+- **Draft** → every player name links to their card, from the pool, the rosters
+  and the pick history. This matters most *after* the draft: the pool is empty
+  from the last pick onward, so before this the scouting cards were unreachable
+  for the rest of the weekend.
+
+The team page derives its points from the same `buildLeaderboard` call
+`/standings` uses rather than a query of its own, so the two cannot disagree.
+
+Ratings render as bars rather than bare numbers, because they are self-reported
+and decorative — a precise number invites people to read them as data that feeds
+something, and it feeds nothing (CLAUDE.md invariant 7).
+
+### Who can edit a team
+
+`/me` shows the team form via `canActForTeam()`, not a `role === 'CAPTAIN'`
+comparison. `resolveRole()` returns `ADMIN` for anyone with `is_admin`, so an
+admin who is *also* a captain never equals `'CAPTAIN'` and silently lost the
+team form — the exact trap CLAUDE.md invariant 5 exists to prevent. The helper
+is the only thing that knows ADMIN sits above CAPTAIN.
 
 ## The queue and dashboard
 

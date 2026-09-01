@@ -177,18 +177,22 @@ export default async function Dashboard() {
         <SectionHeading
           title="Standings"
           aside={
-            <Link href="/games" className="text-sm font-black uppercase tracking-wide underline">
-              All games
+            <Link href="/standings" className="text-sm font-black uppercase tracking-wide underline">
+              Full table
             </Link>
           }
         />
         <ol className="card flex flex-col gap-2">
           {leaderboard.map((row, index) => (
-            <li key={row.teamId} className="flex items-center gap-3">
-              <PlacementBadge placement={index + 1} />
-              <TeamMark colorHex={row.colorHex} logoUrl={row.logoUrl} size={32} />
-              <span className="min-w-0 flex-1 truncate font-bold">{row.teamName}</span>
-              <span className="shrink-0 text-2xl font-black tabular-nums">{row.totalPoints}</span>
+            <li key={row.teamId}>
+              <Link href={`/teams/${row.teamId}`} className="flex items-center gap-3">
+                <PlacementBadge placement={index + 1} />
+                <TeamMark colorHex={row.colorHex} logoUrl={row.logoUrl} size={32} />
+                <span className="min-w-0 flex-1 truncate font-bold underline">{row.teamName}</span>
+                <span className="shrink-0 text-2xl font-black tabular-nums">
+                  {row.totalPoints}
+                </span>
+              </Link>
             </li>
           ))}
         </ol>

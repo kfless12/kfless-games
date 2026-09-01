@@ -230,6 +230,10 @@ Admin sets draft status: `NOT_STARTED` → `LIVE` → `COMPLETE`.
 - **Player pool:** searchable/sortable cards showing photo, name, nickname, and scouting ratings.
 - **Pick history:** reverse-chronological, with who picked whom and when.
 - **Team panels:** the 4 rosters filling up live.
+- **Every player name is a link to their card** (§9.4), from the pool, the
+  rosters and the pick history alike. The pool is empty from the last pick
+  onward, so without this the scouting cards become unreachable for the rest of
+  the weekend — which is most of it.
 
 ### 5.4 Admin controls
 
@@ -420,6 +424,24 @@ the photos. §10.2 says all state lives in Postgres; this makes that true rather
 than nearly true. The cost is that the app serves the images itself with no
 CDN, which at 17 users with immutable caching does not matter.
 
+### 9.4 Reading other people's cards
+
+Profiles are for looking at, not only for filling in. Two read-only views, both
+public per §3.4:
+
+- **`/players/<id>`** — a player's draft card: photo, bio, self-reported
+  ratings, scouting report, team, pick number, and the Mister Irrelevant label
+  (§1.1). Shows an edit link only to that player, or to an admin.
+- **`/teams/<id>`** — a team's profile: logo, motto, where it sits in the table,
+  its points per game, and the roster with every player linked to their card.
+
+Ratings render as bars rather than bare numbers. They are self-reported and
+decorative — they feed no scoring, seeding or matchmaking — and a precise
+number invites people to read them as data.
+
+The team page derives its points from the same leaderboard function
+`/standings` uses, not from a query of its own, so the two can never disagree.
+
 ---
 
 ## 10. Stack and deployment
@@ -468,7 +490,13 @@ Detailed styling is deferred; the following are structural requirements.
 
 - **Mobile-first.** Design at 390px width and scale up. The bracket view is the hard case — use horizontal scroll with a sticky round header rather than trying to fit 8 entries on a phone screen.
 - **Light, very high-contrast theme by default.** This overrides the earlier dark-mode recommendation, which was wrong for the use case: dark themes wash out badly in direct sunlight, and outdoors the screen will be at maximum brightness anyway, which dominates battery draw far more than pixel color does. A dark mode toggle is welcome as a nice-to-have; it must not be the default.
-- **Bottom nav (4 items):** Queue · Games & Standings · Draft & Rosters · Me. Admin is a separate gated route, not a nav item.
+- **Bottom nav (5 items):** Queue · Games · Standings · Draft & Rosters · Me. Admin is a separate gated route, not a nav item.
+
+  Amended from 4. "Games & Standings" was one slot; in practice the leaderboard
+  sat on top and the games list below it, so the games — the thing people
+  actually want to open — were buried under the table. "Who is winning" and
+  "what is being played" are different questions and now have a tab each.
+  Five items still clear the 44px tap target at 390px, at 78px each.
 - Every team appears with its logo and color wherever it's named.
 - Tap targets ≥ 44px. Assume unsteady hands.
 

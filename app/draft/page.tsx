@@ -137,7 +137,11 @@ export default async function DraftPage() {
               <div className="flex items-center gap-3">
                 <TeamMark colorHex={team.colorHex} logoUrl={team.logoUrl} size={40} />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-lg font-black leading-tight">{team.name}</p>
+                  <p className="truncate text-lg font-black leading-tight">
+                    <Link href={`/teams/${team.id}`} className="underline">
+                      {team.name}
+                    </Link>
+                  </p>
                   <p className="text-sm text-muted">
                     Pick {team.draftPosition} &middot; {team.roster.length} player
                     {team.roster.length === 1 ? '' : 's'}
@@ -149,7 +153,15 @@ export default async function DraftPage() {
                 {team.roster.map((player) => (
                   <li key={player.id} className="flex justify-between gap-3 text-base">
                     <span>
-                      {player.fullName}
+                      {/*
+                        Through to the full card. SPEC.md §5.3 puts scouting
+                        ratings on the pool cards, but the pool empties at the
+                        last pick and the profiles were then unreachable for the
+                        rest of the weekend.
+                      */}
+                      <Link href={`/players/${player.id}`} className="underline">
+                        {player.fullName}
+                      </Link>
                       {player.isCaptain && (
                         <span className="chip chip-quiet ml-2">Captain</span>
                       )}
@@ -185,7 +197,9 @@ export default async function DraftPage() {
               >
                 <span>
                   <span className="mr-2 font-black tabular-nums">#{entry.pickNumber}</span>
-                  {entry.player.fullName}
+                  <Link href={`/players/${entry.player.id}`} className="underline">
+                    {entry.player.fullName}
+                  </Link>
                   {entry.player.isMisterIrrelevant && (
                     <span className="chip chip-amber ml-2">Mister Irrelevant</span>
                   )}

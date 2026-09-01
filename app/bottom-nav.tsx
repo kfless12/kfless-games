@@ -13,9 +13,18 @@ import { usePathname } from 'next/navigation';
  * outdoors, by someone holding a drink.
  */
 
+/*
+ * SPEC.md §11 originally fixed this at four items with "Games & Standings" as
+ * one slot. Split in two: "who is winning" and "what is being played" are
+ * different questions, and pairing them buried the games list under the
+ * leaderboard. §11 was amended rather than overridden.
+ *
+ * Five items still clears §11's 44px tap target at 390px — 78px each.
+ */
 const ITEMS = [
   { href: '/queue', label: 'Queue', glyph: '🍺' },
   { href: '/games', label: 'Games', glyph: '🏆' },
+  { href: '/standings', label: 'Standings', glyph: '📊' },
   { href: '/draft', label: 'Draft', glyph: '📋' },
   { href: '/me', label: 'Me', glyph: '🙂' },
 ] as const;
