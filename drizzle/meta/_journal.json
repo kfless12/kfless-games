@@ -29,6 +29,13 @@
       "when": 1788204860245,
       "tag": "0003_phase2_images_and_profile_complete",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1788270084035,
+      "tag": "0004_phase4_single_elim_format",
+      "breakpoints": true
     }
   ]
 }

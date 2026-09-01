@@ -1,0 +1,1 @@
+ALTER TYPE "public"."game_format" ADD VALUE 'SINGLE_ELIM' BEFORE 'ROUND_ROBIN';

@@ -38,6 +38,7 @@ export const roleEnum = pgEnum('role', ['ADMIN', 'CAPTAIN', 'PLAYER']);
 
 export const gameFormatEnum = pgEnum('game_format', [
   'DOUBLE_ELIM',
+  'SINGLE_ELIM',
   'ROUND_ROBIN',
   'RANKED_FFA',
 ]);

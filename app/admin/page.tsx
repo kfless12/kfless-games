@@ -1,5 +1,6 @@
 import { asc, eq } from 'drizzle-orm';
 import { headers } from 'next/headers';
+import Link from 'next/link';
 
 import { identify, isAdmin, listCredentials } from '@/lib/auth';
 import { getDb } from '@/lib/db';
@@ -83,6 +84,21 @@ export default async function AdminPage() {
 
   return (
     <Shell>
+      <nav className="flex flex-wrap gap-2">
+        <Link
+          href="/admin/games"
+          className="flex h-11 items-center rounded-lg border-2 border-ink px-4 text-base font-bold"
+        >
+          Games &amp; brackets
+        </Link>
+        <Link
+          href="/draft"
+          className="flex h-11 items-center rounded-lg border-2 border-ink px-4 text-base font-bold"
+        >
+          Draft board
+        </Link>
+      </nav>
+
       <dl className="flex flex-wrap gap-x-8 gap-y-2 text-base">
         <Stat label="Players" value={`${rows.length} / 17`} />
         <Stat label="Profiles complete" value={`${profilesDone} / ${rows.length}`} />

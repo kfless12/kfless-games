@@ -5,7 +5,7 @@ online snake draft, and a tournament engine with a live "up next" queue.
 
 `SPEC.md` is the source of truth. `CLAUDE.md` holds the working rules.
 
-**Status: Phase 3 (the draft) complete.** Build order is SPEC.md §14.
+**Status: Phase 4 (the tournament engine) complete.** Build order is SPEC.md §14.
 
 ## Stack
 
@@ -77,6 +77,7 @@ docker compose up --build
 app/                 routes (App Router)
   page.tsx           landing page
   draft/             draft board, picks, admin controls, 5s polling
+  admin/games/       create/edit games, build and clear brackets
   me/                self-service profile + captain team editing
   join/              magic link redemption + 6-digit code entry
   admin/             gated admin console, credential list, edit any card
@@ -94,6 +95,14 @@ lib/
   uuid.ts            id validation, so a bad id is a 404 not a 500
   draft.ts           snake order + pick authorization (pure, tested)
   draft-state.ts     everything the draft board reads, in one query
+  games.ts           game config + points matrix parsing (pure, tested)
+  engine/
+    seeding.ts       bracket order, same-team separation, byes
+    bracket.ts       the full skeleton with every pointer wired
+    replay.ts        replays results; placements; readiness
+    round-robin.ts   circle method, standings, tie-breakers
+    ffa.ts           one heat, placement validation
+    persist.ts       writes a generated tournament into Postgres
   audit.ts           append-only audit trail
   env.ts             environment access, SPEC.md §10.3
   db/
@@ -137,6 +146,32 @@ Per-person magic links with a 6-digit day-of fallback (SPEC.md §3.2).
 - `ADMIN_CREDENTIAL` is break-glass only: it elevates an **already identified**
   person, so admin actions always have a real actor in `audit_log`.
 - Credential submission is rate limited per IP in Postgres, not in memory.
+
+## The tournament engine
+
+Four formats, all generated as pure functions before anything touches the
+database (SPEC.md §6):
+
+| Format | Shape at the event |
+|---|---|
+| `DOUBLE_ELIM` | Beer pong: 8 entries, 15 matches, spans all 3 days |
+| `SINGLE_ELIM` | A flip cup option: 4 entries, 3 matches |
+| `ROUND_ROBIN` | A flip cup option: 4 entries, 6 matches |
+| `RANKED_FFA` | One heat, admin assigns placement 1..N |
+
+The whole bracket skeleton is built up front — every winners match, every losers
+match, the grand final and its reset — with all advancement pointers wired at
+generation time. Reporting a result is "write the entry into the target slot";
+undo is "drop the result and replay". The bracket shape is never re-derived.
+
+Flip cup's format is a runtime choice, not a build-time one: pick it in
+`/admin/games` when you configure the game, and rebuild. Changing the format of
+a scheduled game tells you to re-schedule, and re-scheduling refuses if any
+match already has a result.
+
+`npm test` covers this heavily — the engine is the highest-risk code in the
+project. Includes a full 8-entry run asserting final placements and an undo of a
+mid-bracket match asserting downstream slots cleared and nothing else touched.
 
 ## The draft
 
