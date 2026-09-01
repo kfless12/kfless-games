@@ -130,7 +130,8 @@ No points column. Points are always computed.
 | `format` | `DOUBLE_ELIM` \| `SINGLE_ELIM` \| `ROUND_ROBIN` \| `RANKED_FFA` |
 | `entries_per_team` | int, default 1. Beer pong = 2. |
 | `entry_size` | int null — players per entry, informational only (beer pong = 2) |
-| `points_matrix` | jsonb, placement → points, e.g. `{"1":100,"2":70,"3":50,"4":30}` |
+| `points_matrix` | jsonb, placement → points, e.g. `{"1":100,"2":70,"3":50,"4":30}`. Used by every format except `ROUND_ROBIN`. |
+| `points_per_win` | int null — points earned per win. Used **only** by `ROUND_ROBIN`, which scores by wins rather than by placement. See §6.3. |
 | `entry_aggregation` | `SUM` \| `BEST` — how multiple entries from one team combine. Default `SUM`. |
 | `scheduled_day` | int 1–3, nullable |
 | `sort_order` | int |
@@ -282,8 +283,18 @@ otherwise say how to rank co-eliminated entries; this is the rule.
 
 - Every entry plays every other entry once. With 4 entries: 6 matches.
 - Standings table: Wins, Losses, Cup/Point Differential.
-- Tie-breakers in order: (1) head-to-head record, (2) differential, (3) coin flip prompt shown to the admin.
-- Placement = standings order.
+- Tie-breakers in order: (1) head-to-head record, (2) differential, (3) coin flip
+  prompt shown to the admin. Head-to-head is a mini-table of wins among the
+  entries tied on wins, not a pairwise comparison — pairwise is not transitive,
+  and three entries can beat each other in a cycle.
+- Placement = standings order. It is recorded so a round robin can say who won
+  it, and so §6.5's 1st- and 2nd-place tie-breakers keep working across formats.
+- **Points do not come from placement.** A round robin pays `points_per_win` for
+  every win and nothing for a loss, so an entry's points are
+  `wins × points_per_win`. There is no 1st/2nd/3rd prize in a round robin;
+  beating three teams is worth three times beating one.
+- `points_matrix` is unused for this format. `points_per_win` must be set before
+  the game can be marked complete.
 
 ### 6.4 `RANKED_FFA`
 
@@ -296,11 +307,28 @@ otherwise say how to rank co-eliminated entries; this is the rule.
 When a game is marked `COMPLETE`:
 
 1. Compute placement per entry.
-2. Look up `points_matrix[placement]` for each entry.
-3. Write one `game_results` row per entry.
-4. For teams with multiple entries, apply `entry_aggregation` at read time — do not pre-aggregate into a stored column.
+2. Work out the points per entry:
+   - `ROUND_ROBIN` — `wins × points_per_win` (§6.3).
+   - every other format — `points_matrix[placement]`.
+3. Write one `game_results` row per entry, carrying both the placement and the
+   points.
+4. For teams with multiple entries, apply `entry_aggregation` at read time — do
+   not pre-aggregate into a stored column.
 
-**There is no format-based weighting.** A game is worth whatever its `points_matrix` says. If beer pong should matter more, the admin gives it a bigger matrix. One system, not two.
+`game_results.points_awarded` is what the leaderboard sums, per §4.7. It is
+written once when the game is marked complete, so changing a game's
+`points_matrix` or `points_per_win` afterwards drops its results and reopens it —
+the same rule as editing a match result (§8). Nothing recomputes points behind
+the admin's back.
+
+**There is no format-based weighting.** A game is worth whatever the admin
+configures it to be worth: a bigger `points_matrix`, or a bigger
+`points_per_win`. The app never multiplies a game's value because of its format.
+
+Round robin scores by wins rather than by placement because a round robin has no
+ranked finish worth paying for — every entry plays every other, so wins already
+measure the whole thing. That is a difference in how points are *earned*, not a
+weighting applied on top.
 
 **Global tie-breakers**, in order: (1) total points, (2) number of 1st-place finishes, (3) number of 2nd-place finishes, (4) head-to-head in round-robin games, (5) admin manual override with a required reason string.
 

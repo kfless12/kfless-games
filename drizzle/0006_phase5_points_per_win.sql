@@ -1,0 +1,2 @@
+ALTER TABLE "games" ADD COLUMN "points_per_win" integer;--> statement-breakpoint
+ALTER TABLE "games" ADD CONSTRAINT "games_points_per_win_non_negative" CHECK ("games"."points_per_win" is null or "games"."points_per_win" >= 0);

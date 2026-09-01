@@ -2,7 +2,7 @@
 
 import { useActionState, useState } from 'react';
 
-import { FORMAT_LABELS, type GameFormat } from '@/lib/games';
+import { FORMAT_LABELS, type GameFormat, scoresByWins } from '@/lib/games';
 
 import { deleteGame, scheduleGameAction, unscheduleGameAction } from './actions';
 import { GameForm, type GameFormValues } from './game-form';
@@ -66,7 +66,13 @@ export function GameRow({ game }: { game: GameRowData }) {
         {hasResults && ` · ${game.completedCount} played`}
       </p>
 
-      <p className="font-mono text-sm text-muted">{game.pointsMatrix}</p>
+      <p className="font-mono text-sm text-muted">
+        {scoresByWins(game.format as GameFormat)
+          ? game.pointsPerWin === null
+            ? 'points per win not set'
+            : `${game.pointsPerWin} per win`
+          : game.pointsMatrix}
+      </p>
 
       {message && (
         <p role="status" className="rounded-lg border-2 border-rule p-3 text-base font-semibold">

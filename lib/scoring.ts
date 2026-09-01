@@ -1,5 +1,3 @@
-import { pointsForPlacement } from '@/lib/games';
-
 /*
  * The leaderboard. SPEC.md §6.5.
  *
@@ -19,6 +17,7 @@ export type ScoringGame = {
   format: string;
   entryAggregation: EntryAggregation;
   pointsMatrix: unknown;
+  pointsPerWin?: number | null;
   /** Only a COMPLETE game contributes; see SPEC.md §6.5. */
   status: string;
   sortOrder: number;
@@ -79,13 +78,18 @@ export function aggregateGamePoints(
   return perEntryPoints.reduce((total, points) => total + points, 0);
 }
 
-/**
- * Recomputes points from the game's matrix rather than trusting the stored
- * points_awarded, so a matrix the admin edited after the fact is reflected.
- * The stored value is kept as the audit record of what was awarded at the time.
+/*
+ * The leaderboard sums game_results.points_awarded, which SPEC.md §4.7 calls the
+ * only input to the leaderboard.
+ *
+ * It deliberately does NOT recompute from points_matrix. Round robin pays by
+ * wins (SPEC.md §6.3) and the win count is not in game_results, so recomputing
+ * would work for some formats and not others. Instead, changing a game's
+ * scoring config drops its results and reopens it — the same rule as editing a
+ * match result — so a stale total is impossible.
  */
-export function pointsForResult(game: ScoringGame, result: ScoringResult): number {
-  return pointsForPlacement(game.pointsMatrix, result.placement);
+export function pointsForResult(_game: ScoringGame, result: ScoringResult): number {
+  return result.pointsAwarded;
 }
 
 export function buildLeaderboard(input: {

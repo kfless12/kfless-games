@@ -690,3 +690,131 @@ describe('editing a result', () => {
     });
   });
 });
+
+describe('round robin scores by wins, not placement (SPEC.md §6.3)', () => {
+  /** Plays all six matches so the given team order finishes 3-0, 2-1, 1-2, 0-3. */
+  async function playRoundRobin(client: import('pg').PoolClient, gameId: string) {
+    const rows = await client.query(
+      `select m.id, array_agg(mp.entry_id order by mp.slot) as ids,
+              array_agg(e.team_id order by mp.slot) as teams
+       from matches m
+       join match_participants mp on mp.match_id = m.id
+       join entries e on e.id = mp.entry_id
+       where m.game_id = $1 group by m.id`,
+      [gameId],
+    );
+
+    // Rank teams arbitrarily but deterministically, then let the better rank win.
+    const teamIds = [...new Set(rows.rows.flatMap((r) => r.teams as string[]))].sort();
+    const rank = new Map(teamIds.map((teamId, index) => [teamId, index]));
+
+    for (const row of rows.rows) {
+      const [entryA, entryB] = row.ids as [string, string];
+      const [teamA, teamB] = row.teams as [string, string];
+      const winner = rank.get(teamA)! < rank.get(teamB)! ? entryA : entryB;
+      const outcome = await reportMatchResult(admin, { matchId: row.id, winnerEntryId: winner });
+      assert.ok(outcome.ok, !outcome.ok ? outcome.error : '');
+    }
+
+    return rank;
+  }
+
+  it('refuses to score until points per win is set', async () => {
+    await withGame('ROUND_ROBIN', 1, async (client, gameId) => {
+      await playRoundRobin(client, gameId);
+      const outcome = await completeGame(admin, gameId);
+      assert.equal(outcome.ok, false);
+      assert.ok(!outcome.ok && /points per win/i.test(outcome.error));
+    });
+  });
+
+  it('pays wins x points_per_win, and nothing for a loss', async () => {
+    await withGame('ROUND_ROBIN', 1, async (client, gameId) => {
+      await client.query('update games set points_per_win = 50 where id = $1', [gameId]);
+      const rank = await playRoundRobin(client, gameId);
+
+      const outcome = await completeGame(admin, gameId);
+      assert.ok(outcome.ok, !outcome.ok ? outcome.error : '');
+
+      const results = await client.query(
+        `select e.team_id, r.placement, r.points_awarded
+         from game_results r join entries e on e.id = r.entry_id
+         where r.game_id = $1 order by r.placement`,
+        [gameId],
+      );
+
+      // The strongest team wins all three, then 2, then 1, then none.
+      const expectedWins = [3, 2, 1, 0];
+      assert.equal(results.rows.length, 4);
+
+      results.rows.forEach((row, index) => {
+        assert.equal(
+          row.points_awarded,
+          expectedWins[index] * 50,
+          `placement ${row.placement} should be ${expectedWins[index]} wins x 50`,
+        );
+      });
+
+      // The bottom team lost everything, so it scores nothing at all.
+      assert.equal(results.rows.at(-1)!.points_awarded, 0, 'no points for a loss');
+      void rank;
+    });
+  });
+
+  it('records the standings order as placement even though it pays nothing', async () => {
+    await withGame('ROUND_ROBIN', 1, async (client, gameId) => {
+      await client.query('update games set points_per_win = 10 where id = $1', [gameId]);
+      await playRoundRobin(client, gameId);
+      await completeGame(admin, gameId);
+
+      const rows = await client.query(
+        'select placement from game_results where game_id = $1 order by placement',
+        [gameId],
+      );
+      assert.deepEqual(
+        rows.rows.map((r) => r.placement),
+        [1, 2, 3, 4],
+        'placement is still a unique 1..N, for display and the §6.5 tie-breakers',
+      );
+    });
+  });
+
+  it('ignores points_matrix entirely for a round robin', async () => {
+    await withGame('ROUND_ROBIN', 1, async (client, gameId) => {
+      // A matrix that would pay 100/70/50/30 if placement decided anything.
+      await client.query(
+        `update games set points_per_win = 10,
+           points_matrix = '{"1":100,"2":70,"3":50,"4":30}'::jsonb
+         where id = $1`,
+        [gameId],
+      );
+      await playRoundRobin(client, gameId);
+      await completeGame(admin, gameId);
+
+      const rows = await client.query(
+        'select points_awarded from game_results where game_id = $1 order by placement',
+        [gameId],
+      );
+      assert.deepEqual(
+        rows.rows.map((r) => r.points_awarded),
+        [30, 20, 10, 0],
+        'wins x 10, not the placement matrix',
+      );
+    });
+  });
+
+  it('pays zero to everyone when points_per_win is zero', async () => {
+    await withGame('ROUND_ROBIN', 1, async (client, gameId) => {
+      await client.query('update games set points_per_win = 0 where id = $1', [gameId]);
+      await playRoundRobin(client, gameId);
+      const outcome = await completeGame(admin, gameId);
+      assert.ok(outcome.ok, !outcome.ok ? outcome.error : '');
+
+      const rows = await client.query(
+        'select points_awarded from game_results where game_id = $1',
+        [gameId],
+      );
+      assert.deepEqual(rows.rows.map((r) => r.points_awarded), [0, 0, 0, 0]);
+    });
+  });
+});

@@ -58,6 +58,7 @@ export default async function AdminGamesPage() {
     entriesPerTeam: row.entriesPerTeam,
     entrySize: row.entrySize,
     pointsMatrix: formatPointsMatrix(row.pointsMatrix),
+    pointsPerWin: row.pointsPerWin,
     entryAggregation: row.entryAggregation,
     scheduledDay: row.scheduledDay,
     station: row.station,

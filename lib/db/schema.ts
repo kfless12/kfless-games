@@ -228,8 +228,16 @@ export const games = pgTable(
     entriesPerTeam: integer('entries_per_team').notNull().default(1),
     // Players per entry. Informational only (beer pong = 2).
     entrySize: integer('entry_size'),
-    // placement -> points, e.g. {"1":100,"2":70,"3":50,"4":30}.
+    // placement -> points, e.g. {"1":100,"2":70,"3":50,"4":30}. Used by every
+    // format except ROUND_ROBIN.
     pointsMatrix: jsonb('points_matrix').notNull().default({}),
+    /*
+     * Points per win, used ONLY by ROUND_ROBIN. SPEC.md §6.3: a round robin has
+     * no ranked finish worth paying for, so it pays per win and nothing for a
+     * loss. Null until the admin sets it, and a round robin cannot be marked
+     * complete without it.
+     */
+    pointsPerWin: integer('points_per_win'),
     entryAggregation: entryAggregationEnum('entry_aggregation').notNull().default('SUM'),
     scheduledDay: integer('scheduled_day'),
     sortOrder: integer('sort_order').notNull().default(0),
@@ -250,6 +258,10 @@ export const games = pgTable(
     check(
       'games_entry_size_positive',
       sql`${table.entrySize} is null or ${table.entrySize} >= 1`,
+    ),
+    check(
+      'games_points_per_win_non_negative',
+      sql`${table.pointsPerWin} is null or ${table.pointsPerWin} >= 0`,
     ),
   ],
 );

@@ -164,9 +164,22 @@ own — undoes that first, because it was decided by a participant about to
 disappear. Editing an early result cascades the same way.
 
 Points never exist as a stored total. `game_results` holds one row per entry per
-game and the leaderboard is computed from it at read time, applying each game's
+game and the leaderboard sums it at read time, applying each game's
 `entry_aggregation` (SUM or BEST) there. That is why undo needs no arithmetic
 unwound — SPEC.md §2.
+
+The leaderboard sums `points_awarded` rather than recomputing, because round
+robin pays by wins and the win count is not in `game_results`. Changing a game's
+`points_matrix` or `points_per_win` therefore drops its results and reopens it —
+the same rule as editing a match result — so a stale total is impossible.
+
+**Round robin scores by wins, not placement** (SPEC.md §6.3). A round robin has
+no ranked finish worth paying for, so it pays `points_per_win` for every win and
+nothing for a loss: beating three teams is worth three times beating one. The
+standings order is still recorded as a placement, so the game can say who won it
+and the 1st/2nd-place tie-breakers keep working — but placement pays nothing.
+`points_matrix` is unused for that format, and the admin form asks for whichever
+field the chosen format actually uses.
 
 Global tie-breakers run in SPEC.md §6.5 order: total points, 1st places, 2nd
 places, round-robin head-to-head, then an admin override that requires a reason.

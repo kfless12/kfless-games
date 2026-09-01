@@ -8,6 +8,7 @@ import {
   parseGameForm,
   parsePointsMatrix,
   pointsForPlacement,
+  scoresByWins,
 } from './games';
 
 describe('parsePointsMatrix', () => {
@@ -143,12 +144,64 @@ describe('parseGameForm', () => {
     assert.equal(result.game.pointsMatrix['1'], 200);
   });
 
-  it('accepts every format', () => {
+  // Round robin scores by wins, so it needs points_per_win and no matrix.
+  // Every other format is the other way round. SPEC.md §6.3.
+  it('accepts every format with the scoring field that format uses', () => {
     for (const format of GAME_FORMATS) {
-      const result = parseGameForm(form({ ...VALID, format }));
+      const fields = scoresByWins(format)
+        ? { ...VALID, format, pointsMatrix: '', pointsPerWin: '50' }
+        : { ...VALID, format };
+      const result = parseGameForm(form(fields));
       assert.ok(result.ok, `${format}: ${!result.ok ? result.errors.join(' | ') : ''}`);
       assert.equal(result.game.format, format);
+
+      if (scoresByWins(format)) {
+        assert.equal(result.game.pointsPerWin, 50);
+        assert.deepEqual(result.game.pointsMatrix, {}, 'a round robin has no matrix');
+      } else {
+        assert.equal(result.game.pointsPerWin, null);
+        assert.equal(result.game.pointsMatrix['1'], 200);
+      }
     }
+  });
+
+  it('rejects a round robin with no points per win', () => {
+    const result = parseGameForm(
+      form({ ...VALID, format: 'ROUND_ROBIN', pointsMatrix: '', pointsPerWin: '' }),
+    );
+    assert.equal(result.ok, false);
+    assert.ok(!result.ok && result.errors.some((e) => /points per win/i.test(e)));
+  });
+
+  it('does not require a points matrix for a round robin', () => {
+    const result = parseGameForm(
+      form({ ...VALID, format: 'ROUND_ROBIN', pointsMatrix: '', pointsPerWin: '25' }),
+    );
+    assert.ok(result.ok, !result.ok ? result.errors.join(' | ') : '');
+  });
+
+  it('still requires a points matrix for the placement formats', () => {
+    for (const format of GAME_FORMATS.filter((f) => !scoresByWins(f))) {
+      const result = parseGameForm(
+        form({ ...VALID, format, pointsMatrix: '', pointsPerWin: '50' }),
+      );
+      assert.equal(result.ok, false, `${format} should need a matrix`);
+    }
+  });
+
+  it('rejects a negative points-per-win', () => {
+    const result = parseGameForm(
+      form({ ...VALID, format: 'ROUND_ROBIN', pointsMatrix: '', pointsPerWin: '-5' }),
+    );
+    assert.equal(result.ok, false);
+  });
+
+  it('accepts zero points per win', () => {
+    const result = parseGameForm(
+      form({ ...VALID, format: 'ROUND_ROBIN', pointsMatrix: '', pointsPerWin: '0' }),
+    );
+    assert.ok(result.ok);
+    assert.equal(result.game.pointsPerWin, 0);
   });
 
   it('defaults entries per team to 1 and sort order to 0', () => {

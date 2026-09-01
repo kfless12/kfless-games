@@ -43,6 +43,13 @@
       "when": 1788276165650,
       "tag": "0005_phase5_standings_overrides",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1788285839543,
+      "tag": "0006_phase5_points_per_win",
+      "breakpoints": true
     }
   ]
 }

@@ -35,12 +35,21 @@ function oneEach(gameId: string): ScoringEntry[] {
   return TEAMS.map((team) => ({ id: `${gameId}-${team.id}`, gameId, teamId: team.id }));
 }
 
-function placings(gameId: string, order: string[]): ScoringResult[] {
+/**
+ * Placements with the points that completeGame would have written. The
+ * leaderboard sums points_awarded (SPEC.md §4.7), so the fixtures have to carry
+ * real values rather than zeroes.
+ */
+function placings(
+  gameId: string,
+  order: string[],
+  matrix: Record<string, number> = { '1': 100, '2': 70, '3': 50, '4': 30 },
+): ScoringResult[] {
   return order.map((teamId, index) => ({
     gameId,
     entryId: `${gameId}-${teamId}`,
     placement: index + 1,
-    pointsAwarded: 0,
+    pointsAwarded: matrix[String(index + 1)] ?? 0,
   }));
 }
 
@@ -81,10 +90,10 @@ describe('buildLeaderboard', () => {
       { id: 'e4', gameId: 'g1', teamId: 'blue' },
     ];
     const results: ScoringResult[] = [
-      { gameId: 'g1', entryId: 'e1', placement: 1, pointsAwarded: 0 },
-      { gameId: 'g1', entryId: 'e2', placement: 4, pointsAwarded: 0 },
-      { gameId: 'g1', entryId: 'e3', placement: 2, pointsAwarded: 0 },
-      { gameId: 'g1', entryId: 'e4', placement: 3, pointsAwarded: 0 },
+      { gameId: 'g1', entryId: 'e1', placement: 1, pointsAwarded: 100 },
+      { gameId: 'g1', entryId: 'e2', placement: 4, pointsAwarded: 30 },
+      { gameId: 'g1', entryId: 'e3', placement: 2, pointsAwarded: 70 },
+      { gameId: 'g1', entryId: 'e4', placement: 3, pointsAwarded: 50 },
     ];
 
     const summed = buildLeaderboard({
@@ -107,10 +116,10 @@ describe('buildLeaderboard', () => {
       { id: 'e4', gameId: 'g1', teamId: 'blue' },
     ];
     const results: ScoringResult[] = [
-      { gameId: 'g1', entryId: 'e1', placement: 1, pointsAwarded: 0 },
-      { gameId: 'g1', entryId: 'e2', placement: 4, pointsAwarded: 0 },
-      { gameId: 'g1', entryId: 'e3', placement: 2, pointsAwarded: 0 },
-      { gameId: 'g1', entryId: 'e4', placement: 3, pointsAwarded: 0 },
+      { gameId: 'g1', entryId: 'e1', placement: 1, pointsAwarded: 100 },
+      { gameId: 'g1', entryId: 'e2', placement: 4, pointsAwarded: 30 },
+      { gameId: 'g1', entryId: 'e3', placement: 2, pointsAwarded: 70 },
+      { gameId: 'g1', entryId: 'e4', placement: 3, pointsAwarded: 50 },
     ];
 
     const best = buildLeaderboard({
@@ -166,10 +175,18 @@ describe('buildLeaderboard', () => {
     assert.equal(withoutG2.find((r) => r.teamId === 'red')!.totalPoints, 100);
   });
 
-  it('recomputes from the points matrix rather than the stored award', () => {
+  /*
+   * SPEC.md §4.7 calls game_results the only input to the leaderboard, so the
+   * stored award is what counts — not a recomputation from the matrix. Round
+   * robin pays by wins and the win count is not in game_results, so recomputing
+   * would work for some formats and not others. Changing a game's scoring
+   * config drops its results and reopens it instead, which is what keeps the
+   * stored value honest.
+   */
+  it('sums the stored award rather than recomputing from the matrix', () => {
     const results = placings('g1', ['red', 'blue', 'green', 'gold']).map((r) => ({
       ...r,
-      pointsAwarded: 9999,
+      pointsAwarded: r.placement === 1 ? 9999 : 0,
     }));
     const rows = buildLeaderboard({
       teams: TEAMS,
@@ -177,15 +194,38 @@ describe('buildLeaderboard', () => {
       entries: oneEach('g1'),
       results,
     });
-    assert.equal(rows[0].totalPoints, 100, 'the matrix decides, not the stored number');
+    assert.equal(rows[0].totalPoints, 9999, 'the stored award decides');
   });
 
-  it('is zero for a placement the matrix does not reach', () => {
+  // Round robin: points come from wins, and no matrix is involved at all.
+  it('sums win-based points for a round robin with no points matrix', () => {
     const rows = buildLeaderboard({
       teams: TEAMS,
-      games: [game({ pointsMatrix: { '1': 100, '2': 70 } })],
+      games: [game({ format: 'ROUND_ROBIN', pointsMatrix: {}, pointsPerWin: 50 })],
       entries: oneEach('g1'),
-      results: placings('g1', ['red', 'blue', 'green', 'gold']),
+      // 3 wins, 1 win, 1 win, 1 win at 50 a win. Placement is the standings
+      // order and pays nothing on its own.
+      results: [
+        { gameId: 'g1', entryId: 'g1-red', placement: 1, pointsAwarded: 150 },
+        { gameId: 'g1', entryId: 'g1-blue', placement: 2, pointsAwarded: 50 },
+        { gameId: 'g1', entryId: 'g1-green', placement: 3, pointsAwarded: 50 },
+        { gameId: 'g1', entryId: 'g1-gold', placement: 4, pointsAwarded: 50 },
+      ],
+    });
+    assert.deepEqual(rows.map((r) => r.totalPoints), [150, 50, 50, 50]);
+    assert.equal(rows[0].teamId, 'red');
+    // The three on one win each are level on points, and all have 0 firsts, so
+    // the 2nd-place count separates them.
+    assert.equal(rows[1].teamId, 'blue', 'blue placed 2nd in the standings');
+  });
+
+  it('is zero for a placement the matrix did not reach', () => {
+    const shallow = { '1': 100, '2': 70 };
+    const rows = buildLeaderboard({
+      teams: TEAMS,
+      games: [game({ pointsMatrix: shallow })],
+      entries: oneEach('g1'),
+      results: placings('g1', ['red', 'blue', 'green', 'gold'], shallow),
     });
     const byId = new Map(rows.map((r) => [r.teamId, r]));
     assert.equal(byId.get('green')!.totalPoints, 0, '3rd is beyond the matrix');
@@ -214,8 +254,8 @@ describe('global tie-breakers, in SPEC.md §6.5 order', () => {
       results: [
         // red wins both; blue is runner-up both times. Same points, and red
         // sorts after blue, so only the firsts count can put red on top.
-        ...placings('g1', ['red', 'blue', 'green', 'gold']),
-        ...placings('g2', ['red', 'blue', 'green', 'gold']),
+        ...placings('g1', ['red', 'blue', 'green', 'gold'], flat),
+        ...placings('g2', ['red', 'blue', 'green', 'gold'], flat),
       ],
     });
     const byId = new Map(rows.map((r) => [r.teamId, r]));
@@ -231,11 +271,12 @@ describe('global tie-breakers, in SPEC.md §6.5 order', () => {
   it('3. falls to 2nd-place finishes when points and firsts both tie', () => {
     // 2nd and 3rd both pay 50, so red (2nd) and blue (3rd) tie on points with
     // no firsts between them. red sorts last, so only the seconds count helps.
+    const secondsMatrix = { '1': 0, '2': 50, '3': 50, '4': 0 };
     const rows = buildLeaderboard({
       teams: TEAMS,
-      games: [game({ id: 'g1', pointsMatrix: { '1': 0, '2': 50, '3': 50, '4': 0 } })],
+      games: [game({ id: 'g1', pointsMatrix: secondsMatrix })],
       entries: oneEach('g1'),
-      results: placings('g1', ['green', 'red', 'blue', 'gold']),
+      results: placings('g1', ['green', 'red', 'blue', 'gold'], secondsMatrix),
     });
     const byId = new Map(rows.map((r) => [r.teamId, r]));
     assert.equal(byId.get('red')!.totalPoints, byId.get('blue')!.totalPoints, 'points tie');
@@ -255,8 +296,8 @@ describe('global tie-breakers, in SPEC.md §6.5 order', () => {
     games: [game({ id: 'g1', pointsMatrix: { '1': 50, '2': 50, '3': 0, '4': 0 } })],
     entries: oneEach('g1'),
     results: [
-      { gameId: 'g1', entryId: 'g1-red', placement: 1, pointsAwarded: 0 },
-      { gameId: 'g1', entryId: 'g1-blue', placement: 1, pointsAwarded: 0 },
+      { gameId: 'g1', entryId: 'g1-red', placement: 1, pointsAwarded: 50 },
+      { gameId: 'g1', entryId: 'g1-blue', placement: 1, pointsAwarded: 50 },
       { gameId: 'g1', entryId: 'g1-green', placement: 3, pointsAwarded: 0 },
       { gameId: 'g1', entryId: 'g1-gold', placement: 4, pointsAwarded: 0 },
     ],
@@ -412,9 +453,9 @@ describe('a head-to-head cycle in the leaderboard', () => {
     games: [game({ id: 'g1', pointsMatrix: { '1': 50, '2': 50, '3': 50, '4': 0 } })],
     entries: oneEach('g1'),
     results: [
-      { gameId: 'g1', entryId: 'g1-red', placement: 1, pointsAwarded: 0 },
-      { gameId: 'g1', entryId: 'g1-blue', placement: 1, pointsAwarded: 0 },
-      { gameId: 'g1', entryId: 'g1-green', placement: 1, pointsAwarded: 0 },
+      { gameId: 'g1', entryId: 'g1-red', placement: 1, pointsAwarded: 50 },
+      { gameId: 'g1', entryId: 'g1-blue', placement: 1, pointsAwarded: 50 },
+      { gameId: 'g1', entryId: 'g1-green', placement: 1, pointsAwarded: 50 },
       { gameId: 'g1', entryId: 'g1-gold', placement: 4, pointsAwarded: 0 },
     ],
   };

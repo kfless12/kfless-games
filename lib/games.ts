@@ -95,12 +95,21 @@ export function pointsForPlacement(matrix: unknown, placement: number): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0;
 }
 
+/**
+ * Round robin scores by wins, so it needs points_per_win and ignores
+ * points_matrix. Every other format is the other way round. SPEC.md §6.3.
+ */
+export function scoresByWins(format: GameFormat): boolean {
+  return format === 'ROUND_ROBIN';
+}
+
 export type ParsedGame = {
   name: string;
   format: GameFormat;
   entriesPerTeam: number;
   entrySize: number | null;
   pointsMatrix: PointsMatrix;
+  pointsPerWin: number | null;
   entryAggregation: EntryAggregation;
   scheduledDay: number | null;
   station: string | null;
@@ -160,8 +169,28 @@ export function parseGameForm(form: FormData): ParsedGameResult {
   const scheduledDay = integer(form, 'scheduledDay', 'Day', 1, 3, errors);
   const sortOrder = integer(form, 'sortOrder', 'Order', 0, 999, errors) ?? 0;
 
-  const matrix = parsePointsMatrix(String(form.get('pointsMatrix') ?? ''));
-  if (!matrix.ok) errors.push(matrix.error);
+  /*
+   * Which scoring field is required depends on the format, so a round robin is
+   * not rejected for lacking a placement matrix it will never use, and a
+   * bracket is not accepted with nothing to pay out.
+   */
+  const winScoring = GAME_FORMATS.includes(format as GameFormat)
+    ? scoresByWins(format as GameFormat)
+    : false;
+
+  let pointsPerWin: number | null = null;
+  let matrix: PointsMatrix = {};
+
+  if (winScoring) {
+    pointsPerWin = integer(form, 'pointsPerWin', 'Points per win', 0, 100_000, errors);
+    if (pointsPerWin === null) {
+      errors.push('A round robin needs points per win — it scores by wins, not placement.');
+    }
+  } else {
+    const parsed = parsePointsMatrix(String(form.get('pointsMatrix') ?? ''));
+    if (parsed.ok) matrix = parsed.matrix;
+    else errors.push(parsed.error);
+  }
 
   if (errors.length > 0) return { ok: false, errors };
 
@@ -172,7 +201,8 @@ export function parseGameForm(form: FormData): ParsedGameResult {
       format: format as GameFormat,
       entriesPerTeam,
       entrySize,
-      pointsMatrix: (matrix as { ok: true; matrix: PointsMatrix }).matrix,
+      pointsMatrix: matrix,
+      pointsPerWin,
       entryAggregation: aggregation as EntryAggregation,
       scheduledDay,
       station: text(form, 'station'),

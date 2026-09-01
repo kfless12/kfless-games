@@ -1,7 +1,7 @@
 import { and, asc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 
 import { getDb } from '@/lib/db';
-import { entries, gameResults, games, matchParticipants, matches } from '@/lib/db/schema';
+import { entries, gameResults, matchParticipants, matches } from '@/lib/db/schema';
 import { pointsForPlacement } from '@/lib/games';
 
 import { orderPlacements, type Elimination, type Placement } from './placement';
@@ -399,29 +399,68 @@ async function findChampion(
 // Writing game_results — SPEC.md §6.5
 // ---------------------------------------------------------------------------
 
+export type ScoredPlacement = {
+  entryId: string;
+  placement: number;
+  pointsAwarded: number;
+};
+
+/**
+ * Writes one game_results row per entry. SPEC.md §6.5.
+ *
+ * Points arrive already worked out, because how they are earned depends on the
+ * format: round robin pays per win (§6.3), everything else pays by placement.
+ * Rows are rewritten wholesale, never incremented (SPEC.md §2).
+ */
 export async function writeGameResults(
   tx: Tx,
   gameId: string,
-  placements: Placement[],
+  scored: ScoredPlacement[],
 ): Promise<number> {
-  const [game] = await tx.select().from(games).where(eq(games.id, gameId)).limit(1);
-  if (!game) return 0;
-
-  // Rewritten wholesale, never incremented. SPEC.md §2.
   await tx.delete(gameResults).where(eq(gameResults.gameId, gameId));
 
-  if (placements.length === 0) return 0;
+  if (scored.length === 0) return 0;
 
   await tx.insert(gameResults).values(
-    placements.map((placement) => ({
+    scored.map((row) => ({
       gameId,
-      entryId: placement.entryId,
-      placement: placement.placement,
-      pointsAwarded: pointsForPlacement(game.pointsMatrix, placement.placement),
+      entryId: row.entryId,
+      placement: row.placement,
+      pointsAwarded: row.pointsAwarded,
     })),
   );
 
-  return placements.length;
+  return scored.length;
+}
+
+/** Placement-based points, for every format except round robin. */
+export function scoreByPlacement(
+  pointsMatrix: unknown,
+  placements: Placement[],
+): ScoredPlacement[] {
+  return placements.map((placement) => ({
+    entryId: placement.entryId,
+    placement: placement.placement,
+    pointsAwarded: pointsForPlacement(pointsMatrix, placement.placement),
+  }));
+}
+
+/**
+ * Win-based points for a round robin. SPEC.md §6.3: `wins × points_per_win`,
+ * nothing for a loss. The placement is still recorded — it is the standings
+ * order, so the game can say who won it and §6.5's 1st/2nd-place tie-breakers
+ * keep working — but it does not affect the points.
+ */
+export function scoreByWins(
+  pointsPerWin: number,
+  placements: Placement[],
+  winsByEntry: Map<string, number>,
+): ScoredPlacement[] {
+  return placements.map((placement) => ({
+    entryId: placement.entryId,
+    placement: placement.placement,
+    pointsAwarded: (winsByEntry.get(placement.entryId) ?? 0) * pointsPerWin,
+  }));
 }
 
 /** Drops a game's computed results, e.g. when an edit invalidates them. */

@@ -6,7 +6,7 @@ import { revalidatePath } from 'next/cache';
 import { recordAudit } from '@/lib/audit';
 import { identify, isAdmin } from '@/lib/auth';
 import { getDb } from '@/lib/db';
-import { games, matches } from '@/lib/db/schema';
+import { gameResults, games, matches } from '@/lib/db/schema';
 import { scheduleGame, unscheduleGame } from '@/lib/engine/persist';
 import { parseGameForm } from '@/lib/games';
 import { isUuid } from '@/lib/uuid';
@@ -96,17 +96,45 @@ export async function updateGame(
     after: { ...parsed.game },
   });
 
-  revalidate();
-
   // Changing the format or entry count invalidates a generated bracket.
   const shapeChanged =
     before.format !== parsed.game.format ||
     before.entriesPerTeam !== parsed.game.entriesPerTeam;
 
+  /*
+   * Changing what a game pays invalidates its scores. The leaderboard sums
+   * game_results.points_awarded (SPEC.md §4.7) rather than recomputing, so the
+   * results are dropped and the game reopened — the same rule as editing a
+   * match result (§8). That makes a stale total impossible.
+   */
+  const scoringChanged =
+    JSON.stringify(before.pointsMatrix) !== JSON.stringify(parsed.game.pointsMatrix) ||
+    before.pointsPerWin !== parsed.game.pointsPerWin;
+
+  let rescoreNeeded = false;
+  if (scoringChanged && before.status === 'COMPLETE') {
+    await db.delete(gameResults).where(eq(gameResults.gameId, gameId));
+    await db
+      .update(games)
+      .set({ status: 'ACTIVE', updatedAt: new Date() })
+      .where(eq(games.id, gameId));
+    rescoreNeeded = true;
+  }
+
+  revalidate();
+  revalidatePath('/games');
+  revalidatePath(`/games/${gameId}`);
+
   if (shapeChanged && before.status !== 'DRAFT') {
     return {
       error: null,
       notice: 'Saved. The shape changed, so re-schedule the game to rebuild the bracket.',
+    };
+  }
+  if (rescoreNeeded) {
+    return {
+      error: null,
+      notice: 'Saved. The points changed, so the old scores were dropped — mark it complete again to rescore.',
     };
   }
 

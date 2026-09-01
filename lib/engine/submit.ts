@@ -15,6 +15,9 @@ import {
   clearGameResults,
   derivePlacementsFromDb,
   propagateResult,
+  scoreByPlacement,
+  scoreByWins,
+  type ScoredPlacement,
   undoMatchResult,
   writeGameResults,
 } from './results';
@@ -372,7 +375,7 @@ export async function completeGame(
       .from(entries)
       .where(eq(entries.gameId, gameId));
 
-    let placements: { entryId: string; placement: number }[];
+    let scored: ScoredPlacement[];
 
     if (game.format === 'RANKED_FFA') {
       const heat = allMatches[0];
@@ -384,7 +387,7 @@ export async function completeGame(
         .from(matchParticipants)
         .where(eq(matchParticipants.matchId, heat.id));
 
-      placements = rows
+      const placements = rows
         .filter((row) => row.entryId !== null && row.rank !== null)
         .map((row) => ({ entryId: row.entryId!, placement: row.rank! }))
         .sort((a, b) => a.placement - b.placement);
@@ -392,12 +395,23 @@ export async function completeGame(
       if (placements.length !== gameEntries.length) {
         return { ok: false as const, error: 'Not every entry has a placement.' };
       }
+
+      scored = scoreByPlacement(game.pointsMatrix, placements);
     } else if (game.format === 'ROUND_ROBIN') {
       const outstanding = allMatches.filter((match) => match.status !== 'COMPLETE').length;
       if (outstanding > 0) {
         return {
           ok: false as const,
           error: `${outstanding} match${outstanding === 1 ? '' : 'es'} still to play.`,
+        };
+      }
+
+      // SPEC.md §6.3: a round robin pays per win, so it cannot be scored until
+      // the admin has said what a win is worth.
+      if (game.pointsPerWin === null) {
+        return {
+          ok: false as const,
+          error: 'Set the points per win first — a round robin scores by wins, not placement.',
         };
       }
 
@@ -418,7 +432,10 @@ export async function completeGame(
         };
       }
 
-      placements = outcome.placements;
+      const winsByEntry = new Map(
+        outcome.standings.map((row) => [row.entryId, row.wins]),
+      );
+      scored = scoreByWins(game.pointsPerWin, outcome.placements, winsByEntry);
     } else {
       const derived = await derivePlacementsFromDb(tx, gameId, game.format);
       if (!derived.complete) {
@@ -430,10 +447,10 @@ export async function completeGame(
               : 'The bracket has no winner yet.',
         };
       }
-      placements = derived.placements;
+      scored = scoreByPlacement(game.pointsMatrix, derived.placements);
     }
 
-    const resultCount = await writeGameResults(tx, gameId, placements);
+    const resultCount = await writeGameResults(tx, gameId, scored);
 
     await tx
       .update(games)

@@ -7,6 +7,7 @@ import {
   FORMAT_LABELS,
   GAME_FORMATS,
   type GameFormat,
+  scoresByWins,
 } from '@/lib/games';
 
 import { createGame, updateGame } from './actions';
@@ -19,6 +20,7 @@ export type GameFormValues = {
   entriesPerTeam: number;
   entrySize: number | null;
   pointsMatrix: string;
+  pointsPerWin: number | null;
   entryAggregation: string;
   scheduledDay: number | null;
   station: string | null;
@@ -33,6 +35,7 @@ const BLANK: GameFormValues = {
   entriesPerTeam: 1,
   entrySize: null,
   pointsMatrix: '100, 70, 50, 30',
+  pointsPerWin: 50,
   entryAggregation: 'SUM',
   scheduledDay: null,
   station: null,
@@ -122,21 +125,45 @@ export function GameForm({
         </span>
       </Field>
 
-      <Field name={`pointsMatrix-${values.id ?? 'new'}`} label="Points by placement">
-        <input
-          id={`pointsMatrix-${values.id ?? 'new'}`}
-          name="pointsMatrix"
-          type="text"
-          required
-          defaultValue={values.pointsMatrix}
-          placeholder="100, 70, 50, 30"
-          className={INPUT}
-        />
-        <span className="text-sm text-muted">
-          Highest first: 1st place, then 2nd, and so on. A game is worth whatever this says
-          &mdash; there is no format weighting.
-        </span>
-      </Field>
+      {/*
+        Round robin scores by wins and has no ranked finish, so it asks for a
+        per-win value instead of a placement matrix. SPEC.md §6.3.
+      */}
+      {scoresByWins(format) ? (
+        <Field name={`pointsPerWin-${values.id ?? 'new'}`} label="Points per win">
+          <input
+            id={`pointsPerWin-${values.id ?? 'new'}`}
+            name="pointsPerWin"
+            type="number"
+            inputMode="numeric"
+            min={0}
+            max={100000}
+            required
+            defaultValue={values.pointsPerWin ?? 50}
+            className={INPUT}
+          />
+          <span className="text-sm text-muted">
+            Every win pays this; a loss pays nothing. Three wins out of three is worth three
+            times one win &mdash; there is no 1st, 2nd or 3rd prize in a round robin.
+          </span>
+        </Field>
+      ) : (
+        <Field name={`pointsMatrix-${values.id ?? 'new'}`} label="Points by placement">
+          <input
+            id={`pointsMatrix-${values.id ?? 'new'}`}
+            name="pointsMatrix"
+            type="text"
+            required
+            defaultValue={values.pointsMatrix}
+            placeholder="100, 70, 50, 30"
+            className={INPUT}
+          />
+          <span className="text-sm text-muted">
+            Highest first: 1st place, then 2nd, and so on. A game is worth whatever this says
+            &mdash; there is no format weighting.
+          </span>
+        </Field>
+      )}
 
       <Field name={`entryAggregation-${values.id ?? 'new'}`} label="Multiple entries combine by">
         <select
