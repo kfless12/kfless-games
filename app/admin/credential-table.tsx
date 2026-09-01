@@ -40,14 +40,14 @@ export function CredentialTable({ rows }: { rows: CredentialRow[] }) {
       </div>
 
       {message && (
-        <p role="status" className="rounded-lg border-2 border-rule p-3 text-base font-semibold">
+        <p role="status" className="card-hot text-base font-bold">
           {message}
         </p>
       )}
 
       <ul className="flex flex-col gap-3">
         {rows.map((row) => (
-          <li key={row.id} className="rounded-lg border-2 border-rule p-4">
+          <li key={row.id} className="card-quiet">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <span className="text-lg font-bold">{row.fullName}</span>
               <span className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-muted">
@@ -55,7 +55,7 @@ export function CredentialTable({ rows }: { rows: CredentialRow[] }) {
                   <span className="flex items-center gap-1.5">
                     <span
                       aria-hidden
-                      className="inline-block size-3 rounded-full border border-rule"
+                      className="swatch"
                       style={{ backgroundColor: row.teamColor ?? undefined }}
                     />
                     {row.teamName}
@@ -80,7 +80,7 @@ export function CredentialTable({ rows }: { rows: CredentialRow[] }) {
               <>
                 <p className="mt-3 break-all font-mono text-sm text-muted">{row.joinUrl}</p>
                 <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <span className="rounded bg-ink px-3 py-1.5 font-mono text-xl tracking-widest tabular-nums text-paper">
+                  <span className="rounded-md border-2 border-ink bg-ink px-3 py-1.5 font-mono text-xl tracking-widest tabular-nums text-paper">
                     {row.joinCode}
                   </span>
                   <CopyButton label="Copy link" value={row.joinUrl} />
@@ -114,7 +114,7 @@ export function CredentialTable({ rows }: { rows: CredentialRow[] }) {
 }
 
 /** 44px minimum tap target, per SPEC.md §11. */
-const BUTTON = 'h-11 rounded-lg border-2 border-ink px-4 text-base font-bold';
+const BUTTON = 'btn';
 
 function SubmitButton({ children }: { children: React.ReactNode }) {
   return (

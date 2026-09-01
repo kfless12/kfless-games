@@ -1,23 +1,48 @@
 @import 'tailwindcss';
 
 /*
- * Light, very high-contrast theme, deliberately the default. SPEC.md §11:
- * the event is outdoors in daylight, where dark themes wash out. A dark-mode
- * toggle is a nice-to-have; it must never become the default, so there is no
- * `prefers-color-scheme: dark` override here.
+ * Beer-Olympics poster, built to be read in direct sunlight.
+ *
+ * SPEC.md §11 is the hard constraint: light, very high-contrast, by default.
+ * Outdoors the screen is at maximum brightness and a dark theme washes out, so
+ * the theme goes bold through weight, size, chunky rules and hard shadows
+ * rather than through dark panels. There is deliberately no
+ * `prefers-color-scheme: dark` override — a dark default is on CLAUDE.md's
+ * rejected list.
+ *
+ * Warm cream paper and a deep beer amber carry the theme. Every accent is
+ * checked against the paper: ink is ~18:1, muted ~7:1, amber ~5.4:1 (used for
+ * headings, borders and fills, never small body text).
  *
  * Raw values are declared without the `--color-` prefix, then mapped into
- * Tailwind's colour namespace below. Naming both sides `--color-*` would make
- * the @theme mapping refer to itself and the colours would not resolve.
- *
- * Full styling is Phase 7. This is only the baseline.
+ * Tailwind's namespace. Naming both sides `--color-*` makes the @theme mapping
+ * refer to itself and the colours silently fail to resolve.
  */
 
 :root {
-  --ink: #0a0a0a;
-  --paper: #ffffff;
-  --muted: #44464d;
-  --rule: #b8bcc4;
+  --ink: #14110e;
+  --paper: #fffcf5;
+  --muted: #574f45;
+  --rule: #d8ccb8;
+
+  /* Beer. Amber for structure, foam for fills and highlights. */
+  --amber: #a04f00;
+  --amber-bright: #e79a2b;
+  --foam: #fdf2dc;
+
+  /* Placement colours, used on standings and final placings. */
+  /*
+    Medal colours carry ink text, not paper. SPEC.md §11 wants this readable in
+    direct sunlight, and paper-on-gold measured 2.88:1 — below AA at the 14px
+    the badges use. Against ink these are 6.4 / 5.7 / 5.0. Bronze was lightened
+    from #a2662f to clear 4.5:1 with ink while still reading as bronze.
+  */
+  --gold: #c98a10;
+  --silver: #8d8d93;
+  --bronze: #b87333;
+
+  --shadow: 4px 4px 0 var(--ink);
+  --shadow-sm: 3px 3px 0 var(--ink);
 }
 
 @theme inline {
@@ -25,6 +50,12 @@
   --color-paper: var(--paper);
   --color-muted: var(--muted);
   --color-rule: var(--rule);
+  --color-amber: var(--amber);
+  --color-amber-bright: var(--amber-bright);
+  --color-foam: var(--foam);
+  --color-gold: var(--gold);
+  --color-silver: var(--silver);
+  --color-bronze: var(--bronze);
   --font-sans:
     system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -38,4 +69,224 @@ html {
 body {
   background: var(--paper);
   color: var(--ink);
+  /*
+   * A faint bubble field. Kept very low contrast so it never competes with
+   * text — the point is warmth, not decoration you have to read around.
+   */
+  background-image:
+    radial-gradient(circle at 12% 18%, rgb(231 154 43 / 9%) 0 7px, transparent 8px),
+    radial-gradient(circle at 78% 42%, rgb(231 154 43 / 7%) 0 11px, transparent 12px),
+    radial-gradient(circle at 34% 76%, rgb(231 154 43 / 8%) 0 5px, transparent 6px);
+  background-attachment: fixed;
+}
+
+@layer components {
+  /* ---------------------------------------------------------------------
+   * Structure
+   * ------------------------------------------------------------------ */
+
+  .card {
+    border: 3px solid var(--ink);
+    border-radius: 0.75rem;
+    background: var(--paper);
+    padding: 1rem;
+    box-shadow: var(--shadow-sm);
+  }
+
+  /* For rows and lists, where a hard shadow on every item would be noise. */
+  .card-quiet {
+    border: 2px solid var(--rule);
+    border-radius: 0.75rem;
+    background: var(--paper);
+    padding: 1rem;
+  }
+
+  .card-hot {
+    border: 3px solid var(--ink);
+    border-radius: 0.75rem;
+    background: var(--foam);
+    padding: 1rem;
+    box-shadow: var(--shadow);
+  }
+
+  /* Inverted panel for the one thing that must not be missed. */
+  .card-shout {
+    border: 3px solid var(--ink);
+    border-radius: 0.75rem;
+    background: var(--ink);
+    color: var(--paper);
+    padding: 1.25rem;
+    box-shadow: var(--shadow);
+  }
+
+  /* ---------------------------------------------------------------------
+   * Type
+   * ------------------------------------------------------------------ */
+
+  .display {
+    font-weight: 900;
+    letter-spacing: -0.03em;
+    line-height: 0.95;
+    text-transform: uppercase;
+  }
+
+  .eyebrow {
+    font-size: 0.75rem;
+    font-weight: 800;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--amber);
+  }
+
+  .section-title {
+    font-size: 1.25rem;
+    font-weight: 900;
+    letter-spacing: -0.01em;
+    text-transform: uppercase;
+  }
+
+  /* ---------------------------------------------------------------------
+   * Controls. Every one is at least 44px tall per SPEC.md §11 — assume
+   * unsteady hands.
+   * ------------------------------------------------------------------ */
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 2.875rem;
+    padding: 0 1rem;
+    border: 3px solid var(--ink);
+    border-radius: 0.625rem;
+    background: var(--paper);
+    font-size: 1rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    box-shadow: var(--shadow-sm);
+    transition: transform 60ms ease, box-shadow 60ms ease;
+  }
+
+  .btn:active:not(:disabled) {
+    transform: translate(3px, 3px);
+    box-shadow: none;
+  }
+
+  .btn:disabled {
+    opacity: 0.45;
+    box-shadow: none;
+  }
+
+  .btn-primary {
+    background: var(--amber-bright);
+  }
+
+  .btn-shout {
+    background: var(--ink);
+    color: var(--paper);
+  }
+
+  .btn-quiet {
+    border-width: 2px;
+    border-color: var(--rule);
+    box-shadow: none;
+    font-weight: 700;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+
+  .field {
+    min-height: 2.875rem;
+    width: 100%;
+    border: 2px solid var(--rule);
+    border-radius: 0.625rem;
+    background: var(--paper);
+    padding: 0 0.75rem;
+    font-size: 1rem;
+  }
+
+  .field:focus-visible {
+    outline: 3px solid var(--amber-bright);
+    outline-offset: 1px;
+    border-color: var(--ink);
+  }
+
+  /* ---------------------------------------------------------------------
+   * Bits
+   * ------------------------------------------------------------------ */
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    border: 2px solid var(--ink);
+    border-radius: 999px;
+    padding: 0.125rem 0.625rem;
+    font-size: 0.75rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+  }
+
+  .chip-amber {
+    background: var(--amber-bright);
+  }
+
+  .chip-quiet {
+    border-color: var(--rule);
+    color: var(--muted);
+  }
+
+  /* A team's colour, shown everywhere the team is named (SPEC.md §11). */
+  .swatch {
+    display: inline-block;
+    flex: none;
+    width: 0.875rem;
+    height: 0.875rem;
+    border: 2px solid var(--ink);
+    border-radius: 999px;
+  }
+
+  .team-logo {
+    flex: none;
+    border: 2px solid var(--ink);
+    border-radius: 0.5rem;
+    object-fit: cover;
+    background: var(--paper);
+  }
+
+  /* Foam along the top of a shouting panel. Purely decorative. */
+  .foam-edge {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .foam-edge::before {
+    content: '';
+    position: absolute;
+    inset: -0.6rem -0.2rem auto -0.2rem;
+    height: 1.1rem;
+    background:
+      radial-gradient(circle at 8% 100%, var(--paper) 0 0.55rem, transparent 0.56rem),
+      radial-gradient(circle at 26% 100%, var(--paper) 0 0.42rem, transparent 0.43rem),
+      radial-gradient(circle at 44% 100%, var(--paper) 0 0.6rem, transparent 0.61rem),
+      radial-gradient(circle at 62% 100%, var(--paper) 0 0.38rem, transparent 0.39rem),
+      radial-gradient(circle at 80% 100%, var(--paper) 0 0.52rem, transparent 0.53rem),
+      radial-gradient(circle at 96% 100%, var(--paper) 0 0.45rem, transparent 0.46rem);
+    pointer-events: none;
+  }
+
+  /* Bottom nav clearance, so a fixed bar never covers the last control. */
+  .with-nav {
+    padding-bottom: 5.5rem;
+  }
+}
+
+/* Respect a reduced-motion preference: the press animation is the only motion. */
+@media (prefers-reduced-motion: reduce) {
+  .btn {
+    transition: none;
+  }
 }

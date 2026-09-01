@@ -5,7 +5,7 @@ online snake draft, and a tournament engine with a live "up next" queue.
 
 `SPEC.md` is the source of truth. `CLAUDE.md` holds the working rules.
 
-**Status: Phase 6 (queue and dashboard) complete.** Build order is SPEC.md §14.
+**Status: Phase 7 (polish) complete.** Build order is SPEC.md §14.
 
 ## Stack
 
@@ -69,18 +69,23 @@ docker compose up --build
 | `npm run db:seed` | Seed the roster from `scripts/seed-data.ts` |
 | `npm run db:reset` | Wipe and reseed (`SEED_RESET=1`) |
 | `npm run db:demo` | Wipe, reseed, **and** fill placeholder avatars/bios/ratings |
+| `npm run db:dry-run` | Demo seed **plus** a played-out 3-day event, for looking at the UI |
 | `npm run db:studio` | Drizzle Studio |
 
 ## Layout
 
 ```
 app/                 routes (App Router)
+  globals.css        the design system — tokens and component classes
+  ui.tsx             shared chrome: header, section heading, marks, badges
+  bottom-nav.tsx     the four-item nav from §11
   page.tsx           the player dashboard (§7.2)
   queue/             all stations, start/bump controls
   poller.tsx         shared 10s poller with a reconnecting state
   api/pulse/         reachability check the poller can fail against
   draft/             draft board, picks, admin controls, 5s polling
   games/             standings, per-game match list, result entry
+  games/bracket-view.tsx  the bracket, horizontally scrolled (§11)
   admin/games/       create/edit games, build and clear brackets
   me/                self-service profile + captain team editing
   join/              magic link redemption + 6-digit code entry
@@ -127,7 +132,69 @@ scripts/
   seed-validate.ts   roster validation (pure, tested)
   fake-profiles.ts   deterministic placeholder avatars/bios (tested)
   seed-data.ts       THE ROSTER — replace the placeholder names here
+  dry-run.ts         plays a whole 3-day event so the UI has real data
+public/logo.svg      the event mark, hand-authored SVG
 ```
+
+## Look and feel
+
+Light, high-contrast, and warm — beer-hall colours on cream paper, heavy black
+rules and hard offset shadows. Light is not a default here, it is the
+requirement: SPEC.md §11 points out the event is outdoors in daylight, so dark
+mode is explicitly rejected as the default and the optional toggle is skipped.
+
+`app/globals.css` holds the whole system as tokens plus a small set of component
+classes (`.card`, `.card-hot`, `.card-shout`, `.btn`, `.chip`, `.display`,
+`.eyebrow`, `.foam-edge`). Pages compose those; they do not invent colours.
+
+Every text-on-background pair is at or above WCAG AA (4.5:1) at its actual size:
+
+| Pair | Ratio |
+|---|---|
+| body text on paper | 18.4 |
+| secondary text on paper | 7.9 |
+| amber eyebrow on paper | 5.7 |
+| amber-bright headline on ink | 8.1 |
+| ink on amber-bright (buttons, chips, round headers) | 8.1 |
+| ink on gold / silver / bronze (medals) | 6.4 / 5.7 / 5.0 |
+
+The medals carry **ink** text, not paper. Paper on gold measured 2.88:1, which
+fails at the 14px the badges use, and bronze was lightened from `#a2662f` to
+`#b87333` to clear 4.5:1 against ink while still reading as bronze.
+
+### The bracket
+
+SPEC.md §11 names this the hard case and prescribes the fix: horizontal scroll
+with a sticky round header, rather than trying to fit 8 entries on a phone.
+
+Rounds are columns inside their own `overflow-x-auto` scroller, so the **page**
+never scrolls sideways. Winners, losers and the grand final are three separate
+scrollers — stacking all three into one grid at 390px is unreadable. Round
+headers stick to the top of the scroller and name the stage (`W final`,
+`L final`, `Final`, `Reset`) rather than only numbering it.
+
+There are deliberately **no connector lines**. At this width they are either
+hairlines nobody can see in sunlight or they crowd out the names, and the names
+are the information; column position plus the bolded winner carries the shape.
+
+Entry labels drop the word "Team" in bracket cells only — "Team Three — B" does
+not fit a column and truncates to "Team Three …", losing the half that tells the
+two entries apart. The colour swatch already says which team it is. Full labels
+stay on the placings list and the match cards.
+
+The grand-final reset is only played if the losers side wins the grand final, so
+while it has no participants it reads "if needed" rather than "waiting" — a
+finished game showing a match still waiting reads as an unfinished game.
+
+### Looking at it with real data
+
+```bash
+npm run db:dry-run
+```
+
+Plays a whole three-day event from a fixed seed: 6 games across all four
+formats, 32 matches, 30 played, one left live so the queue and the "you're up"
+banner have something in them. Deterministic, so a rerun gives identical data.
 
 ## Tests
 
@@ -234,9 +301,6 @@ places, round-robin head-to-head, then an admin override that requires a reason.
 Head-to-head is a mini-table within each tied group rather than a pairwise
 comparison — three teams can beat each other in a cycle, and sorting on a
 non-transitive comparator gives an order nobody can explain.
-
-Still to come in Phase 6: the `localStorage` retry for score entry (SPEC.md §8
-describes it, §14 assigns it to Phase 6).
 
 ## The tournament engine
 

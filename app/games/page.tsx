@@ -7,6 +7,7 @@ import { games, matches, standingsOverrides } from '@/lib/db/schema';
 import { FORMAT_LABELS, type GameFormat } from '@/lib/games';
 import { loadHeadToHead, loadScoringData } from '@/lib/engine/submit';
 import { buildLeaderboard, type ScoringGame } from '@/lib/scoring';
+import { EmptyState, PageHeader, PlacementBadge, SectionHeading, TeamMark } from '@/app/ui';
 
 export const dynamic = 'force-dynamic';
 
@@ -51,64 +52,67 @@ export default async function GamesPage() {
   const scoredGames = scoring.games.filter((game) => game.status === 'COMPLETE').length;
 
   return (
-    <main className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-8 px-5 py-10">
-      <header className="flex items-baseline justify-between gap-4">
-        <div>
-          <p className="text-sm font-bold uppercase tracking-widest text-muted">Standings</p>
-          <h1 className="mt-1 text-3xl font-black tracking-tight">Games</h1>
-        </div>
-        <Link href="/" className="text-base font-bold underline">
-          Home
-        </Link>
-      </header>
+    <main className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-6 px-4 py-6">
+      <PageHeader
+        eyebrow="Who is winning"
+        title="Standings"
+        action={
+          <Link href="/" className="btn btn-quiet">
+            Home
+          </Link>
+        }
+      />
 
       <section className="flex flex-col gap-3">
-        <h2 className="text-xl font-bold">
-          Leaderboard
-          <span className="ml-2 text-base font-normal text-muted">
-            {scoredGames === 0
-              ? 'nothing scored yet'
-              : `${scoredGames} game${scoredGames === 1 ? '' : 's'} scored`}
-          </span>
-        </h2>
+        <SectionHeading
+          title="Leaderboard"
+          aside={
+            <span className="text-sm text-muted">
+              {scoredGames === 0
+                ? 'nothing scored yet'
+                : `${scoredGames} game${scoredGames === 1 ? '' : 's'} scored`}
+            </span>
+          }
+        />
+
+        {scoredGames === 0 && (
+          <EmptyState>
+            No points yet. A game pays out when an admin marks it complete.
+          </EmptyState>
+        )}
 
         <ol className="flex flex-col gap-2">
           {leaderboard.map((row, index) => (
-            <li
-              key={row.teamId}
-              className="flex flex-col gap-1 rounded-lg border-2 border-rule p-4"
-            >
+            <li key={row.teamId} className={index === 0 && scoredGames > 0 ? 'card-hot' : 'card-quiet'}>
               <div className="flex items-center gap-3">
-                <span className="w-6 shrink-0 text-lg font-black tabular-nums">{index + 1}</span>
-                {row.logoUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={row.logoUrl}
-                    alt=""
-                    className="size-9 shrink-0 rounded-lg border-2 border-rule object-cover"
-                  />
-                ) : (
-                  <span
-                    aria-hidden
-                    className="inline-block size-4 shrink-0 rounded-full"
-                    style={{ backgroundColor: row.colorHex }}
-                  />
-                )}
-                <span className="min-w-0 flex-1 text-lg font-bold">{row.teamName}</span>
-                <span className="shrink-0 text-2xl font-black tabular-nums">
+                <PlacementBadge placement={index + 1} />
+                <TeamMark colorHex={row.colorHex} logoUrl={row.logoUrl} size={40} />
+                <span className="min-w-0 flex-1 truncate text-lg font-black">{row.teamName}</span>
+                <span className="shrink-0 text-3xl font-black tabular-nums">
                   {row.totalPoints}
                 </span>
               </div>
 
-              <p className="pl-9 text-sm text-muted">
-                {row.firsts} first{row.firsts === 1 ? '' : 's'} &middot; {row.seconds} second
-                {row.seconds === 1 ? '' : 's'}
-                {row.perGame.length > 0 &&
-                  ` · ${row.perGame.map((game) => `${game.gameName} ${game.points}`).join(', ')}`}
+              <p className="mt-1 flex flex-wrap gap-1.5">
+                {row.firsts > 0 && (
+                  <span className="chip" style={{ backgroundColor: 'var(--gold)', color: 'var(--ink)' }}>
+                    {row.firsts} &times; 1st
+                  </span>
+                )}
+                {row.seconds > 0 && (
+                  <span className="chip" style={{ backgroundColor: 'var(--silver)', color: 'var(--ink)' }}>
+                    {row.seconds} &times; 2nd
+                  </span>
+                )}
+                {row.perGame.map((game) => (
+                  <span key={game.gameId} className="chip chip-quiet">
+                    {game.gameName} {game.points}
+                  </span>
+                ))}
               </p>
 
               {row.overrideReason && (
-                <p className="pl-9 text-sm font-semibold">
+                <p className="mt-1 text-sm font-bold">
                   Tie broken by the admin: {row.overrideReason}
                 </p>
               )}
@@ -118,26 +122,33 @@ export default async function GamesPage() {
       </section>
 
       <section className="flex flex-col gap-3">
-        <h2 className="text-xl font-bold">Games</h2>
+        <SectionHeading title="Games" />
         {gameRows.length === 0 ? (
-          <p className="rounded-lg border-2 border-rule p-4 text-base">No games yet.</p>
+          <EmptyState>No games yet. An admin adds them as the weekend goes.</EmptyState>
         ) : (
           <ul className="flex flex-col gap-2">
             {gameRows.map((game) => {
               const counts = countsByGame.get(game.id);
+              const done = game.status === 'COMPLETE';
               return (
-                <li key={game.id} className="rounded-lg border-2 border-rule p-4">
+                <li key={game.id} className="card-quiet">
                   <Link href={`/games/${game.id}`} className="flex flex-col gap-1">
-                    <span className="flex items-baseline justify-between gap-2">
-                      <span className="text-lg font-bold underline">{game.name}</span>
-                      <span className="text-sm font-bold uppercase tracking-wide text-muted">
+                    <span className="flex items-center justify-between gap-2">
+                      <span className="text-lg font-black underline">{game.name}</span>
+                      <span className={`chip ${done ? 'chip-amber' : 'chip-quiet'}`}>
                         {game.status}
                       </span>
                     </span>
-                    <span className="text-base text-muted">
-                      {FORMAT_LABELS[game.format as GameFormat]}
-                      {game.station && ` · ${game.station}`}
-                      {counts && ` · ${counts.complete}/${counts.total} played`}
+                    <span className="flex flex-wrap gap-1.5">
+                      <span className="chip chip-quiet">
+                        {FORMAT_LABELS[game.format as GameFormat]}
+                      </span>
+                      {game.station && <span className="chip chip-quiet">{game.station}</span>}
+                      {counts && (
+                        <span className="chip chip-quiet">
+                          {counts.complete}/{counts.total} played
+                        </span>
+                      )}
                     </span>
                   </Link>
                 </li>
@@ -148,10 +159,7 @@ export default async function GamesPage() {
       </section>
 
       {identity?.role === 'ADMIN' && (
-        <Link
-          href="/admin/games"
-          className="flex h-12 items-center justify-center rounded-lg border-2 border-ink text-base font-bold"
-        >
+        <Link href="/admin/games" className="btn w-full">
           Manage games
         </Link>
       )}

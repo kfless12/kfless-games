@@ -32,10 +32,10 @@ export function TeamForm({
       <div className="flex items-center gap-3">
         <span
           aria-hidden
-          className="inline-block size-5 rounded-full border border-rule"
+          className="swatch size-5"
           style={{ backgroundColor: colorHex }}
         />
-        <h2 className="text-xl font-bold">Your team</h2>
+        <h2 className="section-title">Your team</h2>
       </div>
 
       <ImagePicker
@@ -56,7 +56,7 @@ export function TeamForm({
           required
           maxLength={60}
           defaultValue={name}
-          className="h-12 rounded-lg border-2 border-rule px-3 text-base"
+          className="field"
         />
       </div>
 
@@ -70,17 +70,17 @@ export function TeamForm({
           type="text"
           maxLength={200}
           defaultValue={motto ?? ''}
-          className="h-12 rounded-lg border-2 border-rule px-3 text-base"
+          className="field"
         />
       </div>
 
       {state.error && (
-        <p role="alert" className="rounded-lg border-2 border-ink p-3 text-base font-semibold">
+        <p role="alert" className="card-shout text-base font-bold">
           {state.error}
         </p>
       )}
       {state.notice && (
-        <p role="status" className="rounded-lg border-2 border-rule p-3 text-base font-semibold">
+        <p role="status" className="card-hot text-base font-bold">
           {state.notice}
         </p>
       )}
@@ -88,7 +88,7 @@ export function TeamForm({
       <button
         type="submit"
         disabled={pending}
-        className="h-14 rounded-lg bg-ink text-lg font-bold text-paper disabled:opacity-50"
+        className="btn btn-primary h-14 text-lg"
       >
         {pending ? 'Saving…' : 'Save team'}
       </button>

@@ -44,7 +44,7 @@ const BLANK: GameFormValues = {
   rules: null,
 };
 
-const INPUT = 'h-12 rounded-lg border-2 border-rule px-3 text-base';
+const INPUT = 'field';
 
 export function GameForm({
   values = BLANK,
@@ -65,7 +65,7 @@ export function GameForm({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="h-14 rounded-lg bg-ink text-lg font-bold text-paper"
+        className="btn btn-primary h-14 w-full text-lg"
       >
         Add a game
       </button>
@@ -75,10 +75,10 @@ export function GameForm({
   const isBracket = format === 'DOUBLE_ELIM' || format === 'SINGLE_ELIM';
 
   return (
-    <form action={formAction} className="flex flex-col gap-4 rounded-lg border-2 border-ink p-4">
+    <form action={formAction} className="card flex flex-col gap-4">
       {values.id && <input type="hidden" name="gameId" value={values.id} />}
 
-      <h3 className="text-lg font-bold">{mode === 'create' ? 'New game' : 'Edit'}</h3>
+      <h3 className="section-title">{mode === 'create' ? 'New game' : 'Edit'}</h3>
 
       <Field name={`name-${values.id ?? 'new'}`} label="Name">
         <input
@@ -251,17 +251,17 @@ export function GameForm({
           rows={3}
           maxLength={4000}
           defaultValue={values.rules ?? ''}
-          className="rounded-lg border-2 border-rule p-3 text-base"
+          className="field h-auto py-2"
         />
       </Field>
 
       {state.error && (
-        <p role="alert" className="rounded-lg border-2 border-ink p-3 text-base font-semibold">
+        <p role="alert" className="card-shout text-base font-bold">
           {state.error}
         </p>
       )}
       {state.notice && (
-        <p role="status" className="rounded-lg border-2 border-rule p-3 text-base font-semibold">
+        <p role="status" className="card-hot text-base font-bold">
           {state.notice}
         </p>
       )}
@@ -270,7 +270,7 @@ export function GameForm({
         <button
           type="submit"
           disabled={pending}
-          className="h-12 flex-1 rounded-lg bg-ink text-base font-bold text-paper disabled:opacity-50"
+          className="btn btn-primary flex-1"
         >
           {pending ? 'Saving…' : mode === 'create' ? 'Add game' : 'Save'}
         </button>
@@ -278,7 +278,7 @@ export function GameForm({
           <button
             type="button"
             onClick={() => setOpen(false)}
-            className="h-12 rounded-lg border-2 border-rule px-4 text-base font-bold"
+            className="btn btn-quiet"
           >
             Cancel
           </button>

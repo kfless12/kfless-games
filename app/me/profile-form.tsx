@@ -35,14 +35,14 @@ export function ProfileForm({
       <input type="hidden" name="playerId" value={playerId} />
 
       <div>
-        <h2 className="text-xl font-bold">{heading}</h2>
+        <h2 className="section-title">{heading}</h2>
         <p className="mt-1 text-base text-muted">{subtitle}</p>
       </div>
 
       <ImagePicker name="photo" label={photoUrl ? 'Change photo' : 'Add photo'} currentUrl={photoUrl} />
 
       <fieldset className="flex flex-col gap-4">
-        <legend className="text-lg font-bold">The basics</legend>
+        <legend className="section-title">The basics</legend>
         {TEXT_FIELDS.map(({ key, label, placeholder }) => (
           <Field key={key} name={key} label={label}>
             <input
@@ -83,7 +83,7 @@ export function ProfileForm({
       </fieldset>
 
       <fieldset className="flex flex-col gap-4">
-        <legend className="text-lg font-bold">Scouting ratings</legend>
+        <legend className="section-title">Scouting ratings</legend>
         <p className="text-base text-muted">
           {RATING_MIN}&ndash;{RATING_MAX}, entirely made up by you. These are decorative and
           never affect scoring or seeding.
@@ -105,7 +105,7 @@ export function ProfileForm({
       </fieldset>
 
       <fieldset className="flex flex-col gap-2">
-        <legend className="text-lg font-bold">Scouting report</legend>
+        <legend className="section-title">Scouting report</legend>
         <p className="text-base text-muted">Write about yourself in the third person.</p>
         <textarea
           id="scoutingReport"
@@ -113,17 +113,17 @@ export function ProfileForm({
           rows={5}
           maxLength={2000}
           defaultValue={str('scoutingReport')}
-          className="rounded-lg border-2 border-rule p-3 text-base"
+          className="field h-auto py-2"
         />
       </fieldset>
 
       {state.error && (
-        <p role="alert" className="rounded-lg border-2 border-ink p-3 text-base font-semibold">
+        <p role="alert" className="card-shout text-base font-bold">
           {state.error}
         </p>
       )}
       {state.notice && (
-        <p role="status" className="rounded-lg border-2 border-rule p-3 text-base font-semibold">
+        <p role="status" className="card-hot text-base font-bold">
           {state.notice}
         </p>
       )}
@@ -131,7 +131,7 @@ export function ProfileForm({
       <button
         type="submit"
         disabled={pending}
-        className="h-14 rounded-lg bg-ink text-lg font-bold text-paper disabled:opacity-50"
+        className="btn btn-primary h-14 text-lg"
       >
         {pending ? 'Saving…' : 'Save profile'}
       </button>
@@ -139,7 +139,7 @@ export function ProfileForm({
   );
 }
 
-const INPUT = 'h-12 rounded-lg border-2 border-rule px-3 text-base';
+const INPUT = 'field';
 
 function Field({
   name,

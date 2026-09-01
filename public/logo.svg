@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-label="kfless games">
+  <!--
+    The event logo. SPEC.md §9.3 allows this as a static asset in the repo.
+    Two cups and a laurel: beer Olympics. Authored as SVG so nothing is
+    downloaded at build time and the Docker build needs no network.
+  -->
+  <circle cx="60" cy="60" r="56" fill="#e79a2b" stroke="#14110e" stroke-width="6"/>
+
+  <!-- laurel -->
+  <g stroke="#14110e" stroke-width="4" fill="none" stroke-linecap="round">
+    <path d="M22 74a44 44 0 0 0 12 22"/>
+    <path d="M98 74a44 44 0 0 1-12 22"/>
+  </g>
+  <g fill="#14110e">
+    <ellipse cx="24" cy="80" rx="5" ry="3" transform="rotate(-35 24 80)"/>
+    <ellipse cx="29" cy="90" rx="5" ry="3" transform="rotate(-20 29 90)"/>
+    <ellipse cx="96" cy="80" rx="5" ry="3" transform="rotate(35 96 80)"/>
+    <ellipse cx="91" cy="90" rx="5" ry="3" transform="rotate(20 91 90)"/>
+  </g>
+
+  <!-- left cup -->
+  <path d="M36 40h26l-4 38a6 6 0 0 1-6 5h-6a6 6 0 0 1-6-5z"
+        fill="#fffcf5" stroke="#14110e" stroke-width="5" stroke-linejoin="round"/>
+  <!-- right cup, tilted for the clink -->
+  <g transform="rotate(14 78 44)">
+    <path d="M64 36h26l-4 38a6 6 0 0 1-6 5h-6a6 6 0 0 1-6-5z"
+          fill="#fffcf5" stroke="#14110e" stroke-width="5" stroke-linejoin="round"/>
+  </g>
+
+  <!-- clink sparks -->
+  <g stroke="#14110e" stroke-width="4" stroke-linecap="round">
+    <path d="M60 24v-8"/>
+    <path d="M47 28l-5-6"/>
+    <path d="M74 27l6-6"/>
+  </g>
+</svg>

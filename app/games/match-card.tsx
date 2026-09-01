@@ -57,6 +57,19 @@ export function MatchCard({
 
   const complete = match.status === 'COMPLETE';
   const playable = match.sides.every((side) => side.entryId !== null);
+
+  /*
+   * The grand-final reset is played only if the losers-bracket side wins the
+   * grand final, so while it has no participants it is conditional rather than
+   * pending. Labelling it "Waiting" makes a finished game look unfinished — and
+   * mid-tournament it implies a match that is coming when it may never be.
+   * Same treatment as the bracket view.
+   */
+  const conditional =
+    match.bracket === 'GRAND_FINAL' &&
+    match.round === 2 &&
+    !complete &&
+    match.sides.every((side) => side.entryId === null);
   const message = rejected ?? undoState.error ?? undoState.notice;
 
   function onSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -79,14 +92,21 @@ export function MatchCard({
   }
 
   return (
-    <li className="flex flex-col gap-3 rounded-lg border-2 border-rule p-4">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <span className="text-sm font-bold uppercase tracking-wide text-muted">{label}</span>
-        <span className="text-sm font-bold uppercase tracking-wide text-muted">
-          {complete ? 'Final' : playable ? 'Ready' : 'Waiting'}
+    <li className={`card-quiet flex flex-col gap-3 ${complete ? '' : playable ? 'border-ink' : ''}`}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-xs font-black uppercase tracking-widest text-muted">{label}</span>
+        <span className={`chip ${complete ? 'chip-quiet' : playable ? 'chip-amber' : 'chip-quiet'}`}>
+          {complete ? 'Final' : playable ? 'Ready' : conditional ? 'If needed' : 'Waiting'}
         </span>
       </div>
 
+      {conditional && (
+        <p className="text-base font-bold text-muted">
+          Only played if the losers side wins the grand final.
+        </p>
+      )}
+
+      {!conditional && (
       <ul className="flex flex-col gap-1">
         {match.sides.map((side, index) => (
           <li
@@ -95,13 +115,9 @@ export function MatchCard({
           >
             <span className="flex min-w-0 items-center gap-2">
               {side.teamColor && (
-                <span
-                  aria-hidden
-                  className="inline-block size-3 shrink-0 rounded-full"
-                  style={{ backgroundColor: side.teamColor }}
-                />
+                <span aria-hidden className="swatch" style={{ backgroundColor: side.teamColor }} />
               )}
-              <span className={side.isWinner ? 'font-black' : ''}>
+              <span className={side.isWinner ? 'font-black' : side.isWinner === false ? 'text-muted' : ''}>
                 {side.label ?? <span className="text-muted">Waiting…</span>}
               </span>
             </span>
@@ -112,6 +128,7 @@ export function MatchCard({
           </li>
         ))}
       </ul>
+      )}
 
       {/*
         SPEC.md §8: a persistent badge until the result actually lands. It says
@@ -119,10 +136,7 @@ export function MatchCard({
         problem rather than as the app having eaten the score.
       */}
       {pending && (
-        <div
-          role="status"
-          className="flex flex-col gap-2 rounded-lg border-2 border-ink bg-ink p-3 text-paper"
-        >
+        <div role="status" className="card-shout flex flex-col gap-2 p-3">
           <p className="text-base font-bold">
             Not saved yet — will keep trying
             {pending.attempts > 0 && ` (${pending.attempts} ${pending.attempts === 1 ? 'try' : 'tries'})`}
@@ -132,18 +146,14 @@ export function MatchCard({
             {pending.attempts > 0 && nextRetryInMs > 0 &&
               ` · retrying every ${Math.round(nextRetryInMs / 1000)}s`}
           </p>
-          <button
-            type="button"
-            onClick={retryNow}
-            className="h-10 rounded-lg bg-paper text-sm font-bold text-ink"
-          >
+          <button type="button" onClick={retryNow} className="btn btn-primary min-h-[2.5rem]">
             Try now
           </button>
         </div>
       )}
 
       {message && (
-        <p role="status" className="rounded-lg border-2 border-rule p-3 text-base font-semibold">
+        <p role="status" className="card-hot text-base font-bold">
           {message}
         </p>
       )}
@@ -175,7 +185,7 @@ export function MatchCard({
                     defaultValue={side.score ?? ''}
                     placeholder="cups"
                     aria-label={`Score for ${side.label}`}
-                    className="h-11 w-20 rounded-lg border-2 border-rule px-2 text-base"
+                    className="field w-20 shrink-0 px-2"
                   />
                 </label>
               ) : null,
@@ -183,19 +193,11 @@ export function MatchCard({
           </fieldset>
 
           <div className="flex flex-wrap gap-2">
-            <button
-              type="submit"
-              disabled={saving}
-              className="h-12 flex-1 rounded-lg bg-ink text-base font-bold text-paper disabled:opacity-50"
-            >
+            <button type="submit" disabled={saving} className="btn btn-primary flex-1">
               {saving ? 'Saving…' : complete ? 'Save change' : 'Save result'}
             </button>
             {complete && (
-              <button
-                type="button"
-                onClick={() => setEditing(false)}
-                className="h-12 rounded-lg border-2 border-rule px-4 text-base font-bold"
-              >
+              <button type="button" onClick={() => setEditing(false)} className="btn btn-quiet">
                 Cancel
               </button>
             )}
@@ -205,20 +207,12 @@ export function MatchCard({
 
       {canReport && complete && !editing && (
         <div className="flex flex-wrap gap-2 border-t-2 border-rule pt-3">
-          <button
-            type="button"
-            onClick={() => setEditing(true)}
-            className="h-11 rounded-lg border-2 border-ink px-4 text-base font-bold"
-          >
+          <button type="button" onClick={() => setEditing(true)} className="btn">
             Change result
           </button>
           <form action={undoAction}>
             <input type="hidden" name="matchId" value={match.id} />
-            <button
-              type="submit"
-              disabled={undoPending}
-              className="h-11 rounded-lg border-2 border-ink px-4 text-base font-bold disabled:opacity-50"
-            >
+            <button type="submit" disabled={undoPending} className="btn">
               {undoPending ? 'Undoing…' : 'Undo'}
             </button>
           </form>

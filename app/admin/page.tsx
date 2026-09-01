@@ -6,6 +6,8 @@ import { identify, isAdmin, listCredentials } from '@/lib/auth';
 import { getDb } from '@/lib/db';
 import { players, teams } from '@/lib/db/schema';
 
+import { PageHeader, SectionHeading } from '@/app/ui';
+
 import { CredentialTable } from './credential-table';
 import { ElevateForm } from './elevate-form';
 
@@ -85,21 +87,18 @@ export default async function AdminPage() {
   return (
     <Shell>
       <nav className="flex flex-wrap gap-2">
-        <Link
-          href="/admin/games"
-          className="flex h-11 items-center rounded-lg border-2 border-ink px-4 text-base font-bold"
-        >
+        <Link href="/admin/games" className="btn">
           Games &amp; brackets
         </Link>
-        <Link
-          href="/draft"
-          className="flex h-11 items-center rounded-lg border-2 border-ink px-4 text-base font-bold"
-        >
+        <Link href="/draft" className="btn">
           Draft board
+        </Link>
+        <Link href="/queue" className="btn">
+          Queue
         </Link>
       </nav>
 
-      <dl className="flex flex-wrap gap-x-8 gap-y-2 text-base">
+      <dl className="card flex flex-wrap gap-x-8 gap-y-2 text-base">
         <Stat label="Players" value={`${rows.length} / 17`} />
         <Stat label="Profiles complete" value={`${profilesDone} / ${rows.length}`} />
         <Stat
@@ -109,7 +108,7 @@ export default async function AdminPage() {
       </dl>
 
       <section className="flex flex-col gap-3">
-        <h2 className="text-xl font-bold">Credentials</h2>
+        <SectionHeading title="Credentials" />
         <p className="text-base text-muted">
           Send each person their link once, from your own inbox. The 6-digit code is the
           fallback for anyone who can&apos;t find the email in the yard. Each row also shows
@@ -124,19 +123,24 @@ export default async function AdminPage() {
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <dt className="text-sm font-bold uppercase tracking-wide text-muted">{label}</dt>
-      <dd className="text-lg font-bold tabular-nums">{value}</dd>
+      <dt className="eyebrow">{label}</dt>
+      <dd className="text-xl font-black tabular-nums">{value}</dd>
     </div>
   );
 }
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-5 py-10">
-      <header>
-        <p className="text-sm font-bold uppercase tracking-widest text-muted">Admin</p>
-        <h1 className="mt-1 text-3xl font-black tracking-tight">Console</h1>
-      </header>
+    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-5 px-4 py-6">
+      <PageHeader
+        eyebrow="Admin only"
+        title="Console"
+        action={
+          <Link href="/" className="btn btn-quiet">
+            Home
+          </Link>
+        }
+      />
       {children}
     </main>
   );

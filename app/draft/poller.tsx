@@ -49,7 +49,8 @@ export function DraftPoller({ intervalMs, active }: { intervalMs: number; active
   if (!active) return null;
 
   return (
-    <p className="text-sm text-muted">
+    <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-muted">
+      <span aria-hidden className="size-2 rounded-full bg-amber-bright" />
       Updated {secondsAgo === 0 ? 'just now' : `${secondsAgo}s ago`}
     </p>
   );

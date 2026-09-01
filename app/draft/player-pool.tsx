@@ -62,16 +62,16 @@ export function PlayerPool({
   return (
     <section className="flex flex-col gap-3">
       <div className="flex items-baseline justify-between gap-3">
-        <h2 className="text-xl font-bold">Available ({pool.length})</h2>
+        <h2 className="section-title">In the pool ({pool.length})</h2>
       </div>
 
       {state.error && (
-        <p role="alert" className="rounded-lg border-2 border-ink p-3 text-base font-semibold">
+        <p role="alert" className="card-shout text-base font-bold">
           {state.error}
         </p>
       )}
       {state.notice && (
-        <p role="status" className="rounded-lg border-2 border-rule p-3 text-base font-semibold">
+        <p role="status" className="card-hot text-base font-bold">
           {state.notice}
         </p>
       )}
@@ -82,15 +82,15 @@ export function PlayerPool({
         onChange={(event) => setQuery(event.target.value)}
         placeholder="Search name, nickname, hometown"
         aria-label="Search the player pool"
-        className="h-12 rounded-lg border-2 border-rule px-3 text-base"
+        className="field"
       />
 
       <label className="flex items-center gap-2 text-base">
-        <span className="font-semibold">Sort by</span>
+        <span className="font-black uppercase tracking-wide">Sort</span>
         <select
           value={sort}
           onChange={(event) => setSort(event.target.value as SortKey)}
-          className="h-11 flex-1 rounded-lg border-2 border-rule px-2 text-base"
+          className="field flex-1"
         >
           <option value="overall">Overall (self-reported)</option>
           <option value="name">Name</option>
@@ -110,25 +110,21 @@ export function PlayerPool({
 
       <ul className="flex flex-col gap-3">
         {shown.map((player) => (
-          <li key={player.id} className="rounded-lg border-2 border-rule p-4">
+          <li key={player.id} className="card-quiet">
             <div className="flex items-start gap-3">
               {player.photoUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={player.photoUrl}
-                  alt=""
-                  className="size-16 shrink-0 rounded-full border-2 border-rule object-cover"
-                />
+                <img src={player.photoUrl} alt="" className="team-logo size-16 rounded-full" />
               ) : (
                 <div aria-hidden className="size-16 shrink-0 rounded-full border-2 border-dashed border-rule" />
               )}
 
               <div className="min-w-0 flex-1">
-                <p className="text-lg font-bold leading-tight">{player.fullName}</p>
+                <p className="text-lg font-black leading-tight">{player.fullName}</p>
                 {player.nickname && (
                   <p className="text-base text-muted">&ldquo;{player.nickname}&rdquo;</p>
                 )}
-                <p className="mt-1 text-base font-bold tabular-nums">{overall(player)} OVR</p>
+                <p className="mt-1"><span className="chip chip-amber">{overall(player)} OVR</span></p>
               </div>
             </div>
 
@@ -148,11 +144,7 @@ export function PlayerPool({
             {canPick && (
               <form action={formAction} className="mt-3">
                 <input type="hidden" name="playerId" value={player.id} />
-                <button
-                  type="submit"
-                  disabled={pending}
-                  className="h-12 w-full rounded-lg bg-ink text-lg font-black uppercase tracking-wide text-paper disabled:opacity-50"
-                >
+                <button type="submit" disabled={pending} className="btn btn-primary w-full text-lg">
                   {pending ? 'Drafting…' : `Draft${pickingFor ? ` to ${pickingFor}` : ''}`}
                 </button>
               </form>

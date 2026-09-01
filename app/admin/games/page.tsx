@@ -8,6 +8,8 @@ import { entries, games, matches } from '@/lib/db/schema';
 import { formatPointsMatrix, type GameFormat } from '@/lib/games';
 
 import { GameForm } from './game-form';
+import { EmptyState, PageHeader } from '@/app/ui';
+
 import { GameRow, type GameRowData } from './game-row';
 
 export const dynamic = 'force-dynamic';
@@ -72,16 +74,16 @@ export default async function AdminGamesPage() {
   }));
 
   return (
-    <main className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-6 px-5 py-10">
-      <header className="flex items-baseline justify-between gap-4">
-        <div>
-          <p className="text-sm font-bold uppercase tracking-widest text-muted">Admin</p>
-          <h1 className="mt-1 text-3xl font-black tracking-tight">Games</h1>
-        </div>
-        <Link href="/admin" className="text-base font-bold underline">
-          Console
-        </Link>
-      </header>
+    <main className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-5 px-4 py-6">
+      <PageHeader
+        eyebrow="Add them as you go"
+        title="Games"
+        action={
+          <Link href="/admin" className="btn btn-quiet">
+            Console
+          </Link>
+        }
+      />
 
       <p className="text-base text-muted">
         Add games as you go. Scheduling one builds its entries and its whole match graph up
@@ -91,9 +93,9 @@ export default async function AdminGamesPage() {
       <GameForm mode="create" />
 
       {list.length === 0 ? (
-        <p className="rounded-lg border-2 border-rule p-4 text-base">
+        <EmptyState>
           No games yet. Beer pong is double elimination with 2 entries per team.
-        </p>
+        </EmptyState>
       ) : (
         <ul className="flex flex-col gap-3">
           {list.map((game) => (

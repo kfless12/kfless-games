@@ -11,7 +11,7 @@ export function JoinForm() {
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
-      <label htmlFor="code" className="text-lg font-bold">
+      <label htmlFor="code" className="section-title text-center">
         Your 6-digit code
       </label>
 
@@ -26,11 +26,11 @@ export function JoinForm() {
         maxLength={6}
         required
         placeholder="000000"
-        className="h-16 rounded-lg border-2 border-ink px-4 text-center font-mono text-3xl tracking-[0.4em] tabular-nums"
+        className="field h-20 border-[3px] border-ink text-center font-mono text-4xl tracking-[0.35em] tabular-nums"
       />
 
       {state.error && (
-        <p role="alert" className="text-base font-semibold text-ink">
+        <p role="alert" className="card-shout text-base font-bold">
           {state.error}
         </p>
       )}
@@ -38,7 +38,7 @@ export function JoinForm() {
       <button
         type="submit"
         disabled={pending}
-        className="h-14 rounded-lg bg-ink text-lg font-bold text-paper disabled:opacity-50"
+        className="btn btn-primary h-14 text-lg"
       >
         {pending ? 'Checking…' : "Let me in"}
       </button>

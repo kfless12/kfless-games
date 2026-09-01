@@ -143,7 +143,7 @@ export function ImagePicker({
       <div className="flex flex-col gap-1">
         <label
           htmlFor={name}
-          className="flex h-11 w-fit cursor-pointer items-center rounded-lg border-2 border-ink px-4 text-base font-bold"
+          className="btn w-fit cursor-pointer"
         >
           {busy ? 'Working…' : label}
         </label>

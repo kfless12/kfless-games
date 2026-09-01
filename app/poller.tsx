@@ -69,14 +69,15 @@ export function Poller({
 
   if (offline) {
     return (
-      <p role="status" className="rounded-lg border-2 border-ink bg-ink px-3 py-2 text-sm font-bold text-paper">
+      <p role="status" className="card-shout px-3 py-2 text-sm font-bold">
         Can&apos;t reach the server — reconnecting. Last update {secondsAgo}s ago.
       </p>
     );
   }
 
   return (
-    <p className="text-sm text-muted">
+    <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-muted">
+      <span aria-hidden className="size-2 rounded-full bg-amber-bright" />
       {label} {secondsAgo === 0 ? 'just now' : `${secondsAgo}s ago`}
     </p>
   );

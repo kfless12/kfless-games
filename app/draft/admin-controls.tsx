@@ -39,14 +39,14 @@ export function AdminControls({
     undoState.notice;
 
   return (
-    <section className="rounded-lg border-2 border-ink p-4">
-      <h2 className="text-lg font-black uppercase tracking-wide">Admin</h2>
+    <section className="card">
+      <h2 className="section-title">Admin</h2>
       <p className="mt-1 text-base text-muted">
         {picksMade} of {totalPicks} picks in.
       </p>
 
       {message && (
-        <p role="status" className="mt-3 rounded-lg border-2 border-rule p-3 text-base font-semibold">
+        <p role="status" className="card-hot mt-3 text-base font-bold">
           {message}
         </p>
       )}
@@ -95,7 +95,7 @@ function Button({ children, pending }: { children: React.ReactNode; pending: boo
     <button
       type="submit"
       disabled={pending}
-      className="h-11 rounded-lg border-2 border-ink px-4 text-base font-bold disabled:opacity-50"
+      className="btn"
     >
       {pending ? 'Working…' : children}
     </button>

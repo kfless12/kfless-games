@@ -16,7 +16,7 @@ export type GameRowData = GameFormValues & {
   completedCount: number;
 };
 
-const BUTTON = 'h-11 rounded-lg border-2 border-ink px-4 text-base font-bold disabled:opacity-50';
+const BUTTON = 'btn';
 
 export function GameRow({ game }: { game: GameRowData }) {
   const [scheduleState, scheduleAction, schedulePending] = useActionState<GameActionState, FormData>(
@@ -46,10 +46,10 @@ export function GameRow({ game }: { game: GameRowData }) {
   const hasResults = game.completedCount > 0;
 
   return (
-    <li className="flex flex-col gap-3 rounded-lg border-2 border-rule p-4">
+    <li className="card-quiet flex flex-col gap-3">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <span className="text-lg font-bold">{game.name}</span>
-        <span className="text-sm font-bold uppercase tracking-wide text-muted">
+        <span className="text-lg font-black">{game.name}</span>
+        <span className={`chip ${game.status === 'COMPLETE' ? 'chip-amber' : 'chip-quiet'}`}>
           {game.status}
         </span>
       </div>
@@ -75,7 +75,7 @@ export function GameRow({ game }: { game: GameRowData }) {
       </p>
 
       {message && (
-        <p role="status" className="rounded-lg border-2 border-rule p-3 text-base font-semibold">
+        <p role="status" className="card-hot text-base font-bold">
           {message}
         </p>
       )}
@@ -128,7 +128,7 @@ export function GameRow({ game }: { game: GameRowData }) {
                 type="text"
                 autoComplete="off"
                 placeholder={game.name}
-                className="h-12 rounded-lg border-2 border-ink px-3 text-base"
+                className="field"
               />
             </>
           ) : (
@@ -137,7 +137,7 @@ export function GameRow({ game }: { game: GameRowData }) {
           <button
             type="submit"
             disabled={deletePending}
-            className="h-12 rounded-lg bg-ink text-base font-bold text-paper disabled:opacity-50"
+            className="btn btn-shout w-full"
           >
             {deletePending ? 'Deleting…' : `Delete ${game.name}`}
           </button>

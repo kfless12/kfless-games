@@ -22,17 +22,17 @@ export function ElevateForm() {
         type="password"
         autoComplete="off"
         required
-        className="h-14 rounded-lg border-2 border-ink px-4 font-mono text-lg"
+        className="field h-14 font-mono text-lg"
       />
       {state.error && (
-        <p role="alert" className="text-base font-semibold">
+        <p role="alert" className="card-shout text-base font-bold">
           {state.error}
         </p>
       )}
       <button
         type="submit"
         disabled={pending}
-        className="h-14 rounded-lg bg-ink text-lg font-bold text-paper disabled:opacity-50"
+        className="btn btn-primary h-14 text-lg"
       >
         {pending ? 'Checking…' : 'Elevate'}
       </button>

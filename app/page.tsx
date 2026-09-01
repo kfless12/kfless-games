@@ -17,6 +17,7 @@ import {
 } from '@/lib/queue';
 import { loadQueueMatches } from '@/lib/queue-db';
 import { buildLeaderboard, type ScoringGame } from '@/lib/scoring';
+import { EmptyState, EventMark, PlacementBadge, SectionHeading, TeamMark } from '@/app/ui';
 
 export const dynamic = 'force-dynamic';
 
@@ -83,44 +84,38 @@ export default async function Dashboard() {
       {youreUp.length > 0 && <YoureUpBanner hits={youreUp} />}
 
       {identity && me ? (
-        <section className="flex flex-wrap items-center justify-between gap-3">
-          <span className="flex items-center gap-3">
+        <section className="card-quiet flex flex-wrap items-center justify-between gap-3">
+          <span className="flex min-w-0 items-center gap-3">
             {me.photoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={me.photoUrl}
                 alt=""
-                className="size-11 shrink-0 rounded-full border-2 border-rule object-cover"
+                className="team-logo size-12 rounded-full"
               />
             ) : null}
-            <span>
-              <span className="block text-lg font-bold leading-tight">{me.fullName}</span>
-              <span className="block text-sm text-muted">
+            <span className="min-w-0">
+              <span className="block truncate text-lg font-black leading-tight">
+                {me.fullName}
+              </span>
+              <span className="block truncate text-sm text-muted">
                 {me.teamName ?? 'Not yet drafted'} &middot; {identity.role}
               </span>
             </span>
           </span>
-          <span className="flex gap-2">
-            <Link href="/me" className="flex h-11 items-center rounded-lg border-2 border-rule px-3 text-base font-bold">
-              Me
-            </Link>
-            <form action={signOut}>
-              <button type="submit" className="h-11 rounded-lg border-2 border-rule px-3 text-base font-bold">
-                Sign out
-              </button>
-            </form>
-          </span>
+          <form action={signOut}>
+            <button type="submit" className="btn btn-quiet">
+              Sign out
+            </button>
+          </form>
         </section>
       ) : (
-        <section className="rounded-lg border-2 border-rule p-4">
+        <section className="card">
           <p className="text-base">
-            You&apos;re not signed in. Everything here is public; your own card, the draft, and
-            reporting a result need your link.
+            Everything here is public. Your own card, the draft, and reporting a result need
+            your link.
           </p>
-          <Link
-            href="/join"
-            className="mt-3 flex h-12 w-full items-center justify-center rounded-lg bg-ink text-base font-bold text-paper"
-          >
+          <Link href="/join" className="btn btn-primary mt-3 w-full">
             Sign in
           </Link>
         </section>
@@ -130,17 +125,14 @@ export default async function Dashboard() {
 
       {myMatches.length > 0 && (
         <section className="flex flex-col gap-2">
-          <h2 className="text-xl font-bold">Your next matches</h2>
-          <ul className="flex flex-col gap-1">
+          <SectionHeading title="Your next matches" />
+          <ul className="card flex flex-col gap-3">
             {myMatches.slice(0, 6).map((match) => (
-              <li
-                key={match.id}
-                className="flex items-baseline justify-between gap-3 border-b border-rule pb-1 text-base"
-              >
-                <Link href={`/games/${match.gameId}`} className="underline">
-                  {match.sides.map((side) => side.label ?? 'TBC').join(' v ')}
+              <li key={match.id} className="flex items-start justify-between gap-3">
+                <Link href={`/games/${match.gameId}`} className="min-w-0 font-bold underline">
+                  {match.sides.map((side) => side.label ?? 'TBC').join('  v  ')}
                 </Link>
-                <span className="shrink-0 text-right text-sm text-muted">
+                <span className="shrink-0 text-right text-xs font-bold uppercase tracking-wide text-muted">
                   {match.gameName}
                   <br />
                   {match.station ?? 'no station'}
@@ -152,22 +144,24 @@ export default async function Dashboard() {
       )}
 
       <section className="flex flex-col gap-3">
-        <div className="flex items-baseline justify-between gap-3">
-          <h2 className="text-xl font-bold">Live queue</h2>
-          <Link href="/queue" className="text-base font-bold underline">
-            All stations
-          </Link>
-        </div>
+        <SectionHeading
+          title="Live queue"
+          aside={
+            <Link href="/queue" className="text-sm font-black uppercase tracking-wide underline">
+              All stations
+            </Link>
+          }
+        />
 
         {queues.length === 0 ? (
-          <p className="rounded-lg border-2 border-rule p-4 text-base">
-            Nothing is on yet.
-          </p>
+          <EmptyState>
+            Nothing is on yet. Matches appear the moment a game is scheduled.
+          </EmptyState>
         ) : (
           <ul className="flex flex-col gap-2">
             {queues.map((queue) => (
-              <li key={queue.station} className="rounded-lg border-2 border-rule p-4">
-                <p className="text-base font-bold">{queue.station}</p>
+              <li key={queue.station} className="card-quiet">
+                <p className="text-base font-black uppercase tracking-wide">{queue.station}</p>
                 <dl className="mt-2 flex flex-col gap-1 text-base">
                   <QueueLine label="Now" match={queue.nowPlaying} myTeamId={myTeamId} />
                   <QueueLine label="On deck" match={queue.onDeck} myTeamId={myTeamId} />
@@ -180,69 +174,61 @@ export default async function Dashboard() {
       </section>
 
       <section className="flex flex-col gap-2">
-        <div className="flex items-baseline justify-between gap-3">
-          <h2 className="text-xl font-bold">Standings</h2>
-          <Link href="/games" className="text-base font-bold underline">
-            Games
-          </Link>
-        </div>
-        <ol className="flex flex-col gap-1">
+        <SectionHeading
+          title="Standings"
+          aside={
+            <Link href="/games" className="text-sm font-black uppercase tracking-wide underline">
+              All games
+            </Link>
+          }
+        />
+        <ol className="card flex flex-col gap-2">
           {leaderboard.map((row, index) => (
-            <li
-              key={row.teamId}
-              className="flex items-center gap-3 border-b border-rule pb-1 text-base"
-            >
-              <span className="w-5 shrink-0 font-bold tabular-nums">{index + 1}</span>
-              <span
-                aria-hidden
-                className="inline-block size-3 shrink-0 rounded-full"
-                style={{ backgroundColor: row.colorHex }}
-              />
-              <span className="min-w-0 flex-1 font-semibold">{row.teamName}</span>
-              <span className="shrink-0 text-lg font-black tabular-nums">{row.totalPoints}</span>
+            <li key={row.teamId} className="flex items-center gap-3">
+              <PlacementBadge placement={index + 1} />
+              <TeamMark colorHex={row.colorHex} logoUrl={row.logoUrl} size={32} />
+              <span className="min-w-0 flex-1 truncate font-bold">{row.teamName}</span>
+              <span className="shrink-0 text-2xl font-black tabular-nums">{row.totalPoints}</span>
             </li>
           ))}
         </ol>
       </section>
 
-      <nav className="flex flex-wrap gap-2 border-t-2 border-rule pt-4">
-        <NavLink href="/queue">Queue</NavLink>
-        <NavLink href="/games">Games &amp; standings</NavLink>
-        <NavLink href="/draft">Draft &amp; rosters</NavLink>
-        {identity && <NavLink href="/me">Me</NavLink>}
-        {isAdmin(identity) && <NavLink href="/admin">Admin</NavLink>}
-      </nav>
+      {isAdmin(identity) && (
+        <Link href="/admin" className="btn w-full">
+          Admin console
+        </Link>
+      )}
     </Shell>
   );
 }
 
 /** SPEC.md §7.2: large, unmissable, and names the station. */
 function YoureUpBanner({ hits }: { hits: YoureUp[] }) {
+  const onNow = hits.some((hit) => hit.slot === 'NOW_PLAYING');
+
   return (
-    <section
-      role="alert"
-      className="rounded-lg border-4 border-ink bg-ink p-5 text-paper"
-    >
-      <p className="text-3xl font-black uppercase tracking-tight">
-        {hits.some((hit) => hit.slot === 'NOW_PLAYING') ? "You're up" : "You're next"}
+    <section role="alert" className="card-shout foam-edge mt-3">
+      <p className="display text-[2.6rem] text-amber-bright">
+        {onNow ? "You're up" : "You're next"}
       </p>
-      <ul className="mt-2 flex flex-col gap-2">
+
+      <ul className="mt-2 flex flex-col gap-3">
         {hits.map((hit) => (
-          <li key={`${hit.match.id}-${hit.slot}`} className="text-lg font-bold">
-            {hit.slot === 'NOW_PLAYING' ? 'Now' : 'On deck'} at{' '}
-            <span className="underline">{hit.station}</span>
-            <span className="block text-base font-normal">
-              {hit.match.gameName} &middot;{' '}
-              {hit.match.sides.map((side) => side.label ?? 'TBC').join(' v ')}
-            </span>
+          <li key={`${hit.match.id}-${hit.slot}`}>
+            <p className="text-sm font-black uppercase tracking-widest text-amber-bright">
+              {hit.slot === 'NOW_PLAYING' ? 'On now' : 'On deck'} &middot; {hit.station}
+            </p>
+            <p className="text-lg font-bold leading-tight">
+              {hit.match.sides.map((side) => side.label ?? 'TBC').join('  v  ')}
+            </p>
+            <p className="text-sm opacity-80">{hit.match.gameName}</p>
           </li>
         ))}
       </ul>
-      <Link
-        href="/queue"
-        className="mt-3 flex h-12 items-center justify-center rounded-lg bg-paper text-base font-bold text-ink"
-      >
-        Open the queue
+
+      <Link href="/queue" className="btn btn-primary mt-4 w-full">
+        Take me there
       </Link>
     </section>
   );
@@ -270,23 +256,15 @@ function QueueLine({
   );
 }
 
-function NavLink({ href, children }: { href: string; children: React.ReactNode }) {
-  return (
-    <Link
-      href={href}
-      className="flex h-11 items-center rounded-lg border-2 border-ink px-4 text-base font-bold"
-    >
-      {children}
-    </Link>
-  );
-}
-
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <main className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-6 px-5 py-8">
-      <header>
-        <p className="text-sm font-bold uppercase tracking-widest text-muted">Phase 6</p>
-        <h1 className="mt-1 text-3xl font-black tracking-tight">kfless games</h1>
+    <main className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-5 px-4 py-6">
+      <header className="flex items-center gap-3">
+        <EventMark size={52} />
+        <div>
+          <p className="eyebrow">Three days &middot; four teams &middot; seventeen</p>
+          <h1 className="display mt-0.5 text-[2.1rem]">kfless games</h1>
+        </div>
       </header>
       {children}
     </main>

@@ -8,6 +8,8 @@ import { players, teams } from '@/lib/db/schema';
 import { RATING_FIELDS, TEXT_FIELDS } from '@/lib/profile';
 
 import { ProfileForm, type ProfileFormValues } from './profile-form';
+import { PageHeader } from '@/app/ui';
+
 import { TeamForm } from './team-form';
 
 export const dynamic = 'force-dynamic';
@@ -40,20 +42,20 @@ export default async function MePage() {
   const canEditTeam = team && identity.role === 'CAPTAIN' && team.captainId === identity.personId;
 
   return (
-    <main className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-8 px-5 py-10">
-      <header className="flex items-baseline justify-between gap-4">
-        <div>
-          <p className="text-sm font-bold uppercase tracking-widest text-muted">Me</p>
-          <h1 className="mt-1 text-3xl font-black tracking-tight">{me.fullName}</h1>
-        </div>
-        <Link href="/" className="text-base font-bold underline">
-          Home
-        </Link>
-      </header>
+    <main className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-6 px-4 py-6">
+      <PageHeader
+        eyebrow="Your draft card"
+        title={me.fullName}
+        action={
+          <Link href="/" className="btn btn-quiet">
+            Home
+          </Link>
+        }
+      />
 
       {!me.profileComplete && (
-        <p className="rounded-lg border-2 border-ink p-4 text-base font-semibold">
-          Your card isn&apos;t finished. It needs a photo, all eight ratings, and a scouting
+        <p className="card-hot text-base font-bold">
+          Your card isn&apos;t finished — it needs a photo, all eight ratings and a scouting
           report before the draft.
         </p>
       )}
@@ -67,7 +69,7 @@ export default async function MePage() {
       />
 
       {canEditTeam && (
-        <section className="border-t-2 border-rule pt-8">
+        <section className="border-t-[3px] border-ink pt-6">
           <TeamForm
             teamId={team.id}
             name={team.name}

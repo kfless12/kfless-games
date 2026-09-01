@@ -2,6 +2,7 @@ import { asc, eq, inArray } from 'drizzle-orm';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
+import { BracketView } from '@/app/games/bracket-view';
 import { CompleteControls } from '@/app/games/complete-controls';
 import { FfaForm, type FfaEntry } from '@/app/games/ffa-form';
 import { MatchCard, type MatchCardData } from '@/app/games/match-card';
@@ -11,6 +12,7 @@ import { entries, gameResults, games, matchParticipants, matches, teams } from '
 import { roundRobinStandings } from '@/lib/engine/submit';
 import { FORMAT_LABELS, formatPointsMatrix, type GameFormat } from '@/lib/games';
 import { isUuid } from '@/lib/uuid';
+import { EmptyState, PageHeader, PlacementBadge, SectionHeading } from '@/app/ui';
 
 export const dynamic = 'force-dynamic';
 
@@ -135,53 +137,70 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
 
   const rr = game.format === 'ROUND_ROBIN' ? await roundRobinStandings(id) : null;
 
-  return (
-    <main className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-6 px-5 py-10">
-      <header className="flex items-baseline justify-between gap-4">
-        <div>
-          <p className="text-sm font-bold uppercase tracking-widest text-muted">
-            {FORMAT_LABELS[game.format as GameFormat]}
-          </p>
-          <h1 className="mt-1 text-3xl font-black tracking-tight">{game.name}</h1>
-        </div>
-        <Link href="/games" className="text-base font-bold underline">
-          Standings
-        </Link>
-      </header>
+  const isBracket = game.format === 'DOUBLE_ELIM' || game.format === 'SINGLE_ELIM';
 
-      <p className="text-base text-muted">
-        {game.status}
-        {game.station && ` · ${game.station}`}
-        {game.scheduledDay !== null && ` · day ${game.scheduledDay}`}
-        {' · '}points {formatPointsMatrix(game.pointsMatrix)}
-      </p>
+  return (
+    <main className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-6 px-4 py-6">
+      <PageHeader
+        eyebrow={FORMAT_LABELS[game.format as GameFormat]}
+        title={game.name}
+        action={
+          <Link href="/games" className="btn btn-quiet">
+            Back
+          </Link>
+        }
+      />
+
+      <div className="flex flex-wrap gap-2">
+        <span className={`chip ${game.status === 'COMPLETE' ? 'chip-amber' : 'chip-quiet'}`}>
+          {game.status}
+        </span>
+        {game.station && <span className="chip chip-quiet">{game.station}</span>}
+        {game.scheduledDay !== null && (
+          <span className="chip chip-quiet">Day {game.scheduledDay}</span>
+        )}
+        <span className="chip chip-quiet">
+          {game.format === 'ROUND_ROBIN'
+            ? game.pointsPerWin === null
+              ? 'points per win not set'
+              : `${game.pointsPerWin} per win`
+            : formatPointsMatrix(game.pointsMatrix)}
+        </span>
+      </div>
 
       {allMatches.length === 0 && (
-        <p className="rounded-lg border-2 border-rule p-4 text-base">
-          Not scheduled yet. An admin builds the bracket from{' '}
-          <Link href="/admin/games" className="underline">
+        <EmptyState>
+          Not scheduled yet — nothing to play until an admin builds it from{' '}
+          <Link href="/admin/games" className="font-bold underline">
             manage games
           </Link>
           .
-        </p>
+        </EmptyState>
       )}
 
       {results.length > 0 && (
         <section className="flex flex-col gap-2">
-          <h2 className="text-xl font-bold">Final placings</h2>
-          <ol className="flex flex-col gap-1">
-            {results.map((result) => (
-              <li
-                key={result.entryId}
-                className="flex items-baseline justify-between gap-3 border-b border-rule pb-1 text-base"
-              >
-                <span>
-                  <span className="mr-2 font-black tabular-nums">{result.placement}</span>
-                  {entryById.get(result.entryId)?.label ?? 'Unknown'}
-                </span>
-                <span className="font-bold tabular-nums">{result.pointsAwarded} pts</span>
-              </li>
-            ))}
+          <SectionHeading title="Final placings" />
+          <ol className="card flex flex-col gap-2">
+            {results.map((result) => {
+              const entry = entryById.get(result.entryId);
+              return (
+                <li key={result.entryId} className="flex items-center gap-3">
+                  <PlacementBadge placement={result.placement} />
+                  <span
+                    aria-hidden
+                    className="swatch"
+                    style={{ backgroundColor: entry?.teamColor ?? 'transparent' }}
+                  />
+                  <span className="min-w-0 flex-1 truncate font-bold">
+                    {entry?.label ?? 'Unknown'}
+                  </span>
+                  <span className="shrink-0 text-lg font-black tabular-nums">
+                    {result.pointsAwarded}
+                  </span>
+                </li>
+              );
+            })}
           </ol>
         </section>
       )}
@@ -192,28 +211,36 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
 
       {rr && (
         <section className="flex flex-col gap-2">
-          <h2 className="text-xl font-bold">Table</h2>
-          <ul className="flex flex-col gap-1">
-            {rr.outcome.standings.map((row, index) => (
-              <li
-                key={row.entryId}
-                className="flex items-baseline justify-between gap-3 border-b border-rule pb-1 text-base"
-              >
-                <span>
-                  <span className="mr-2 font-bold tabular-nums">{index + 1}</span>
-                  {entryById.get(row.entryId)?.label ?? 'Unknown'}
-                </span>
-                <span className="tabular-nums text-muted">
-                  {row.wins}W {row.losses}L &middot; {row.differential > 0 ? '+' : ''}
-                  {row.differential}
-                </span>
-              </li>
-            ))}
+          <SectionHeading
+            title="Table"
+            aside={<span className="text-sm text-muted">wins decide the points</span>}
+          />
+          <ul className="card flex flex-col gap-2">
+            {rr.outcome.standings.map((row, index) => {
+              const entry = entryById.get(row.entryId);
+              return (
+                <li key={row.entryId} className="flex items-center gap-3">
+                  <PlacementBadge placement={index + 1} />
+                  <span
+                    aria-hidden
+                    className="swatch"
+                    style={{ backgroundColor: entry?.teamColor ?? 'transparent' }}
+                  />
+                  <span className="min-w-0 flex-1 truncate font-bold">
+                    {entry?.label ?? 'Unknown'}
+                  </span>
+                  <span className="shrink-0 text-sm tabular-nums text-muted">
+                    {row.wins}W {row.losses}L &middot; {row.differential > 0 ? '+' : ''}
+                    {row.differential}
+                  </span>
+                </li>
+              );
+            })}
           </ul>
           {rr.outcome.unresolvedTies.length > 0 && (
-            <p className="rounded-lg border-2 border-ink p-3 text-base font-semibold">
+            <p className="card-hot text-base font-bold">
               {rr.outcome.unresolvedTies[0].length} entries are level on wins, head-to-head and
-              differential. SPEC calls for a coin flip &mdash; the admin decides.
+              differential. That needs a coin flip &mdash; the admin decides.
             </p>
           )}
         </section>
@@ -221,14 +248,24 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
 
       {heat && ffaEntries.length > 0 && admin && (
         <section className="flex flex-col gap-3">
-          <h2 className="text-xl font-bold">Finishing order</h2>
+          <SectionHeading title="Finishing order" />
           <FfaForm matchId={heat.id} entries={ffaEntries} />
+        </section>
+      )}
+
+      {isBracket && cards.length > 0 && (
+        <section className="flex flex-col gap-2">
+          <SectionHeading
+            title="Bracket"
+            aside={<span className="text-sm text-muted">swipe sideways</span>}
+          />
+          <BracketView matches={cards} />
         </section>
       )}
 
       {!heat && cards.length > 0 && (
         <section className="flex flex-col gap-3">
-          <h2 className="text-xl font-bold">Matches</h2>
+          <SectionHeading title="Matches" />
           <ul className="flex flex-col gap-3">
             {cards.map((match) => (
               <MatchCard

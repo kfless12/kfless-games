@@ -5,6 +5,8 @@ import { identify, isAdmin } from '@/lib/auth';
 import { buildStationQueues, startableMatchIds } from '@/lib/queue';
 import { loadQueueMatches } from '@/lib/queue-db';
 
+import { PageHeader } from '@/app/ui';
+
 import { QueueView } from './queue-view';
 
 export const dynamic = 'force-dynamic';
@@ -41,16 +43,16 @@ export default async function QueuePage() {
   const canStart = [...startable, ...playing].filter(mayTouch);
 
   return (
-    <main className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-5 px-5 py-8">
-      <header className="flex items-baseline justify-between gap-4">
-        <div>
-          <p className="text-sm font-bold uppercase tracking-widest text-muted">Up next</p>
-          <h1 className="mt-1 text-3xl font-black tracking-tight">Queue</h1>
-        </div>
-        <Link href="/" className="text-base font-bold underline">
-          Dashboard
-        </Link>
-      </header>
+    <main className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-5 px-4 py-6">
+      <PageHeader
+        eyebrow="What's on right now"
+        title="Queue"
+        action={
+          <Link href="/" className="btn btn-quiet">
+            Home
+          </Link>
+        }
+      />
 
       <Poller intervalMs={10_000} />
 

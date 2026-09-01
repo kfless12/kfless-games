@@ -51,7 +51,7 @@ export function FfaForm({ matchId, entries }: { matchId: string; entries: FfaEnt
         {order.map((entry, index) => (
           <li
             key={entry.entryId}
-            className="flex items-center gap-2 rounded-lg border-2 border-rule p-3"
+            className="card-quiet flex items-center gap-2 p-3"
           >
             <span className="w-8 shrink-0 text-lg font-black tabular-nums">{index + 1}</span>
             {entry.teamColor && (
@@ -72,7 +72,7 @@ export function FfaForm({ matchId, entries }: { matchId: string; entries: FfaEnt
               defaultValue={entry.rawScore ?? ''}
               placeholder="—"
               aria-label={`Raw score for ${entry.label}`}
-              className="h-11 w-16 shrink-0 rounded-lg border-2 border-rule px-2 text-base"
+              className="field w-16 shrink-0 px-2"
             />
 
             <span className="flex shrink-0 flex-col gap-1">
@@ -100,12 +100,12 @@ export function FfaForm({ matchId, entries }: { matchId: string; entries: FfaEnt
       </ol>
 
       {state.error && (
-        <p role="alert" className="rounded-lg border-2 border-ink p-3 text-base font-semibold">
+        <p role="alert" className="card-shout text-base font-bold">
           {state.error}
         </p>
       )}
       {state.notice && (
-        <p role="status" className="rounded-lg border-2 border-rule p-3 text-base font-semibold">
+        <p role="status" className="card-hot text-base font-bold">
           {state.notice}
         </p>
       )}
@@ -113,7 +113,7 @@ export function FfaForm({ matchId, entries }: { matchId: string; entries: FfaEnt
       <button
         type="submit"
         disabled={pending}
-        className="h-14 rounded-lg bg-ink text-lg font-bold text-paper disabled:opacity-50"
+        className="btn btn-primary h-14 text-lg"
       >
         {pending ? 'Saving…' : 'Save finishing order'}
       </button>

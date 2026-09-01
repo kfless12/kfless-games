@@ -28,8 +28,8 @@ export function CompleteControls({
     completeState.error ?? reopenState.error ?? completeState.notice ?? reopenState.notice;
 
   return (
-    <section className="flex flex-col gap-3 rounded-lg border-2 border-ink p-4">
-      <h2 className="text-lg font-black uppercase tracking-wide">Admin</h2>
+    <section className="card flex flex-col gap-3">
+      <h2 className="section-title">Admin</h2>
       <p className="text-base text-muted">
         {status === 'COMPLETE'
           ? 'Scored. Editing any result reopens it and drops the scores until you mark it complete again.'
@@ -39,7 +39,7 @@ export function CompleteControls({
       </p>
 
       {message && (
-        <p role="status" className="rounded-lg border-2 border-rule p-3 text-base font-semibold">
+        <p role="status" className="card-hot text-base font-bold">
           {message}
         </p>
       )}
@@ -51,7 +51,7 @@ export function CompleteControls({
             <button
               type="submit"
               disabled={completePending}
-              className="h-12 rounded-lg bg-ink px-5 text-base font-bold text-paper disabled:opacity-50"
+              className="btn btn-primary"
             >
               {completePending ? 'Scoring…' : 'Mark complete & score'}
             </button>
@@ -64,7 +64,7 @@ export function CompleteControls({
               <button
                 type="submit"
                 disabled={completePending}
-                className="h-12 rounded-lg border-2 border-ink px-4 text-base font-bold disabled:opacity-50"
+                className="btn"
               >
                 Rescore
               </button>
@@ -74,7 +74,7 @@ export function CompleteControls({
               <button
                 type="submit"
                 disabled={reopenPending}
-                className="h-12 rounded-lg border-2 border-ink px-4 text-base font-bold disabled:opacity-50"
+                className="btn"
               >
                 Reopen
               </button>

@@ -35,8 +35,8 @@ export function QueueView({
 
   if (queues.length === 0) {
     return (
-      <p className="rounded-lg border-2 border-rule p-4 text-base">
-        Nothing is queued. A game has to be scheduled before its matches appear here.
+      <p className="card-quiet border-dashed text-base text-muted">
+        Nothing is queued. Matches appear here the moment a game is scheduled.
       </p>
     );
   }
@@ -44,7 +44,7 @@ export function QueueView({
   return (
     <div className="flex flex-col gap-5">
       {message && (
-        <p role="status" className="rounded-lg border-2 border-rule p-3 text-base font-semibold">
+        <p role="status" className="card-hot text-base font-bold">
           {message}
         </p>
       )}
@@ -56,13 +56,16 @@ export function QueueView({
 
         return (
           <section key={queue.station} className="flex flex-col gap-3">
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <h2 className="text-xl font-bold">{queue.station}</h2>
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b-[3px] border-ink pb-1">
+              <h2 className="section-title">{queue.station}</h2>
               {isAdmin && bumped && (
                 <form action={dispatch}>
                   <input type="hidden" name="op" value="clear-bumps" />
                   <input type="hidden" name="station" value={queue.station} />
-                  <button type="submit" className="text-sm font-bold underline">
+                  <button
+                    type="submit"
+                    className="text-xs font-black uppercase tracking-wide underline"
+                  >
                     Clear bumps
                   </button>
                 </form>
@@ -91,8 +94,8 @@ export function QueueView({
             </ul>
 
             {queue.waiting.length > 0 && (
-              <details className="rounded-lg border-2 border-rule p-3">
-                <summary className="cursor-pointer text-base font-semibold">
+              <details className="card-quiet">
+                <summary className="cursor-pointer text-sm font-black uppercase tracking-wide">
                   {queue.waiting.length} more waiting
                 </summary>
                 <ul className="mt-2 flex flex-col gap-1">
@@ -142,12 +145,12 @@ function QueueRow({
   dispatch: (formData: FormData) => void;
   pending: boolean;
 }) {
-  const emphasis = slot === 'NOW_PLAYING' ? 'border-ink border-4' : 'border-rule border-2';
-
   if (!match) {
+    // An empty slot is drawn quietly — a heavy box around nothing pulls the eye
+    // to the one thing on the page with no information in it.
     return (
-      <li className={`rounded-lg ${emphasis} p-4 opacity-60`}>
-        <p className="text-sm font-bold uppercase tracking-widest text-muted">
+      <li className="card-quiet border-dashed">
+        <p className="text-xs font-black uppercase tracking-widest text-muted">
           {SLOT_LABELS[slot]}
         </p>
         <p className="mt-1 text-base text-muted">Nothing yet</p>
@@ -155,13 +158,13 @@ function QueueRow({
     );
   }
 
+  const hot = slot === 'NOW_PLAYING';
+
   return (
-    <li className={`rounded-lg ${emphasis} p-4`}>
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <p className="text-sm font-bold uppercase tracking-widest text-muted">
-          {SLOT_LABELS[slot]}
-        </p>
-        <p className="text-sm text-muted">
+    <li className={hot ? 'card-hot' : 'card-quiet'}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className={`chip ${hot ? 'chip-amber' : 'chip-quiet'}`}>{SLOT_LABELS[slot]}</p>
+        <p className="text-xs font-bold uppercase tracking-wide text-muted">
           {match.gameName} &middot; {roundLabel(match)}
           {match.queuePosition !== null && ' · bumped'}
         </p>
@@ -174,13 +177,9 @@ function QueueRow({
             className="flex items-center gap-2 text-lg"
           >
             {side.teamColor && (
-              <span
-                aria-hidden
-                className="inline-block size-3 shrink-0 rounded-full"
-                style={{ backgroundColor: side.teamColor }}
-              />
+              <span aria-hidden className="swatch" style={{ backgroundColor: side.teamColor }} />
             )}
-            <span className={side.teamId === myTeamId ? 'font-black' : ''}>
+            <span className={side.teamId === myTeamId ? 'font-black underline decoration-2' : ''}>
               {side.label ?? <span className="text-muted">Waiting…</span>}
             </span>
           </li>
@@ -193,11 +192,7 @@ function QueueRow({
           <form action={dispatch}>
             <input type="hidden" name="op" value="start" />
             <input type="hidden" name="matchId" value={match.id} />
-            <button
-              type="submit"
-              disabled={pending}
-              className="h-11 rounded-lg bg-ink px-4 text-base font-bold text-paper disabled:opacity-50"
-            >
+            <button type="submit" disabled={pending} className="btn btn-primary">
               Start
             </button>
           </form>
@@ -206,22 +201,19 @@ function QueueRow({
           <form action={dispatch}>
             <input type="hidden" name="op" value="unstart" />
             <input type="hidden" name="matchId" value={match.id} />
-            <button type="submit" className="h-11 rounded-lg border-2 border-rule px-4 text-base font-bold">
+            <button type="submit" className="btn btn-quiet">
               Not started
             </button>
           </form>
         )}
-        <Link
-          href={`/games/${match.gameId}`}
-          className="flex h-11 items-center rounded-lg border-2 border-ink px-4 text-base font-bold"
-        >
+        <Link href={`/games/${match.gameId}`} className={match.status === 'IN_PROGRESS' ? 'btn btn-shout' : 'btn'}>
           {match.status === 'IN_PROGRESS' ? 'Report result' : 'Open game'}
         </Link>
         {isAdmin && slot !== 'NOW_PLAYING' && match.queuePosition === null && (
           <form action={dispatch}>
             <input type="hidden" name="op" value="bump" />
             <input type="hidden" name="matchId" value={match.id} />
-            <button type="submit" className="h-11 rounded-lg border-2 border-rule px-4 text-base font-bold">
+            <button type="submit" className="btn btn-quiet">
               Bump
             </button>
           </form>
