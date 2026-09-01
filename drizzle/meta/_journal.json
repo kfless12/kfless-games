@@ -36,6 +36,13 @@
       "when": 1788270084035,
       "tag": "0004_phase4_single_elim_format",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1788276165650,
+      "tag": "0005_phase5_standings_overrides",
+      "breakpoints": true
     }
   ]
 }

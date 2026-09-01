@@ -245,3 +245,79 @@ describe('tie-breakers, in SPEC.md §6.3 order', () => {
     assert.equal(new Set(placements.map((p) => p.entryId)).size, 4);
   });
 });
+
+describe('a head-to-head cycle', () => {
+  const matches = generateRoundRobin(FOUR);
+
+  /*
+   * A beats B, B beats C, C beats A. Pairwise head-to-head cannot order these
+   * three, so the mini-table counts wins within the tied group instead — and
+   * where that is level too, differential decides. This exact cycle turned up
+   * on the first realistic run of a 4-entry round robin, so it is not exotic.
+   */
+  it('falls through to differential rather than producing an arbitrary order', () => {
+    const results = [
+      // A wins everything: 3-0, clear first.
+      score(matches, 'A', 'B', 10, 1),
+      score(matches, 'A', 'C', 10, 1),
+      score(matches, 'A', 'D', 10, 1),
+      // B, C, D each 1-2, in a cycle: B beats C, C beats D, D beats B.
+      score(matches, 'B', 'C', 10, 3),
+      score(matches, 'C', 'D', 10, 7),
+      score(matches, 'D', 'B', 10, 5),
+    ];
+
+    const { standings, placements } = resolveRoundRobin(FOUR, matches, results);
+    const byId = new Map(standings.map((row) => [row.entryId, row]));
+
+    assert.equal(byId.get('A')!.wins, 3);
+    for (const id of ['B', 'C', 'D']) {
+      assert.equal(byId.get(id)!.wins, 1, `${id} should be 1-2`);
+    }
+
+    assert.equal(placements[0].entryId, 'A', 'the 3-0 entry still leads');
+
+    // Each of the three has exactly one win inside the group, so the mini-table
+    // is level and differential has to decide.
+    const tied = placements.slice(1).map((p) => p.entryId);
+    const byDifferential = [...tied].sort(
+      (x, y) => byId.get(y)!.differential - byId.get(x)!.differential,
+    );
+    assert.deepEqual(tied, byDifferential, `expected differential order, got ${tied.join(',')}`);
+  });
+
+  it('lets the mini-table decide when it is not a cycle', () => {
+    const results = [
+      score(matches, 'A', 'B', 10, 1),
+      score(matches, 'A', 'C', 10, 1),
+      score(matches, 'A', 'D', 10, 1),
+      // B beats both C and D, so B leads the mini-table despite a poor
+      // differential; C beats D.
+      score(matches, 'B', 'C', 6, 5),
+      score(matches, 'B', 'D', 6, 5),
+      score(matches, 'C', 'D', 10, 0),
+    ];
+
+    const { standings, placements } = resolveRoundRobin(FOUR, matches, results);
+    const byId = new Map(standings.map((row) => [row.entryId, row]));
+
+    assert.equal(byId.get('B')!.wins, 2);
+    assert.equal(byId.get('C')!.wins, 1);
+    const order = placements.map((p) => p.entryId);
+    assert.deepEqual(order, ['A', 'B', 'C', 'D'], `got ${order.join(',')}`);
+  });
+
+  it('is deterministic across repeated calls with a cycle present', () => {
+    const results = [
+      score(matches, 'A', 'B', 10, 1),
+      score(matches, 'A', 'C', 10, 1),
+      score(matches, 'A', 'D', 10, 1),
+      score(matches, 'B', 'C', 10, 9),
+      score(matches, 'C', 'D', 10, 9),
+      score(matches, 'D', 'B', 10, 9),
+    ];
+    const first = resolveRoundRobin(FOUR, matches, results).placements.map((p) => p.entryId);
+    const second = resolveRoundRobin(FOUR, matches, results).placements.map((p) => p.entryId);
+    assert.deepEqual(first, second);
+  });
+});

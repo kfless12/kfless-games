@@ -5,7 +5,7 @@ online snake draft, and a tournament engine with a live "up next" queue.
 
 `SPEC.md` is the source of truth. `CLAUDE.md` holds the working rules.
 
-**Status: Phase 4 (the tournament engine) complete.** Build order is SPEC.md §14.
+**Status: Phase 5 (scoring, editing, undo) complete.** Build order is SPEC.md §14.
 
 ## Stack
 
@@ -77,6 +77,7 @@ docker compose up --build
 app/                 routes (App Router)
   page.tsx           landing page
   draft/             draft board, picks, admin controls, 5s polling
+  games/             standings, per-game match list, result entry
   admin/games/       create/edit games, build and clear brackets
   me/                self-service profile + captain team editing
   join/              magic link redemption + 6-digit code entry
@@ -96,6 +97,7 @@ lib/
   draft.ts           snake order + pick authorization (pure, tested)
   draft-state.ts     everything the draft board reads, in one query
   games.ts           game config + points matrix parsing (pure, tested)
+  scoring.ts         the leaderboard and §6.5 tie-breakers (pure, tested)
   engine/
     seeding.ts       bracket order, same-team separation, byes
     bracket.ts       the full skeleton with every pointer wired
@@ -103,6 +105,9 @@ lib/
     round-robin.ts   circle method, standings, tie-breakers
     ffa.ts           one heat, placement validation
     persist.ts       writes a generated tournament into Postgres
+    placement.ts     elimination order -> placements, shared by both paths
+    results.ts       reporting, recursive undo, game_results
+    submit.ts        who may submit (§8), and marking a game complete
   audit.ts           append-only audit trail
   env.ts             environment access, SPEC.md §10.3
   db/
@@ -146,6 +151,31 @@ Per-person magic links with a 6-digit day-of fallback (SPEC.md §3.2).
 - `ADMIN_CREDENTIAL` is break-glass only: it elevates an **already identified**
   person, so admin actions always have a real actor in `audit_log`.
 - Credential submission is rate limited per IP in Postgres, not in memory.
+
+## Scoring, editing and undo
+
+Results are reported by the admin or by either captain playing in the match
+(SPEC.md §8), checked server-side per match. Every completed match is editable
+and every result is undoable.
+
+Undo is recursive: clearing a result clears the downstream slots it populated,
+resets those matches, and — if a downstream match already had a result of its
+own — undoes that first, because it was decided by a participant about to
+disappear. Editing an early result cascades the same way.
+
+Points never exist as a stored total. `game_results` holds one row per entry per
+game and the leaderboard is computed from it at read time, applying each game's
+`entry_aggregation` (SUM or BEST) there. That is why undo needs no arithmetic
+unwound — SPEC.md §2.
+
+Global tie-breakers run in SPEC.md §6.5 order: total points, 1st places, 2nd
+places, round-robin head-to-head, then an admin override that requires a reason.
+Head-to-head is a mini-table within each tied group rather than a pairwise
+comparison — three teams can beat each other in a cycle, and sorting on a
+non-transitive comparator gives an order nobody can explain.
+
+Still to come in Phase 6: the `localStorage` retry for score entry (SPEC.md §8
+describes it, §14 assigns it to Phase 6).
 
 ## The tournament engine
 

@@ -114,6 +114,12 @@ export default async function Home() {
             >
               Draft board
             </Link>
+            <Link
+              href="/games"
+              className="flex h-11 items-center rounded-lg border-2 border-ink px-4 text-base font-bold"
+            >
+              Games &amp; standings
+            </Link>
             {isAdmin(identity) && (
               <Link
                 href="/admin"
@@ -150,6 +156,12 @@ export default async function Home() {
               className="flex h-12 w-full items-center justify-center rounded-lg border-2 border-ink text-base font-bold"
             >
               Watch the draft
+            </Link>
+            <Link
+              href="/games"
+              className="flex h-12 w-full items-center justify-center rounded-lg border-2 border-ink text-base font-bold"
+            >
+              Games &amp; standings
             </Link>
           </div>
         </section>
@@ -199,7 +211,7 @@ function Shell({ children }: { children: React.ReactNode }) {
   return (
     <main className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-6 px-5 py-10">
       <header>
-        <p className="text-sm font-bold uppercase tracking-widest text-muted">Phase 3</p>
+        <p className="text-sm font-bold uppercase tracking-widest text-muted">Phase 5</p>
         <h1 className="mt-1 text-4xl font-black tracking-tight">kfless games</h1>
       </header>
       {children}

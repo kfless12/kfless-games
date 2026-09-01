@@ -439,6 +439,38 @@ export const images = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// standings_overrides
+//
+// NOT IN SPEC.md §4. Required by SPEC.md §6.5's fifth global tie-breaker:
+// "admin manual override with a required reason string". The reason is NOT NULL
+// because the spec calls it required, and an override nobody can explain three
+// days later is worse than a coin flip.
+//
+// Only consulted when total points, 1st places, 2nd places and round-robin
+// head-to-head are all level. It nudges the order; it never adds points, so the
+// "derived, never mutated" rule in SPEC.md §2 still holds.
+// ---------------------------------------------------------------------------
+
+export const standingsOverrides = pgTable(
+  'standings_overrides',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    teamId: uuid('team_id')
+      .notNull()
+      .references(() => teams.id, { onDelete: 'cascade' }),
+    /** Lower sorts higher among otherwise-level teams. */
+    priority: integer('priority').notNull().default(0),
+    reason: text('reason').notNull(),
+    createdBy: uuid('created_by').references(() => players.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('standings_overrides_team_id_key').on(table.teamId),
+    check('standings_overrides_reason_not_blank', sql`btrim(${table.reason}) <> ''`),
+  ],
+);
+
+// ---------------------------------------------------------------------------
 // credentials
 //
 // NOT IN SPEC.md §4. SPEC.md §3.1 delegates credential storage to lib/auth.ts

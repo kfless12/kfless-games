@@ -1,4 +1,5 @@
 import type { GeneratedBracket, GeneratedMatch } from './bracket';
+import { orderPlacements, type Placement } from './placement';
 
 /*
  * Replays reported results over a generated bracket skeleton.
@@ -294,41 +295,15 @@ function findChampion(
 export function derivePlacements(
   bracket: GeneratedBracket,
   state: ReplayState,
-): { entryId: string; placement: number }[] {
-  // Seed number, not slot index — those are different, and using the slot
-  // index here ranked co-eliminated entries by bracket position instead of by
-  // strength.
-  const seed = (entryId: string) => bracket.seedByEntry[entryId] ?? Number.MAX_SAFE_INTEGER;
-
-  const allEntries = bracket.slots.filter((id): id is string => id !== null);
-  const knockedOut = new Map(state.eliminations.map((e) => [e.entryId, e.stage]));
-
-  // Anyone still standing outranks everyone knocked out. Normally that is just
-  // the champion; on an unfinished bracket it is everyone left in it.
-  const survivors = allEntries
-    .filter((id) => !knockedOut.has(id))
-    .sort((a, b) => seed(a) - seed(b));
-
-  // Later stage first, and within a stage the stronger seed first — SPEC.md
-  // §6.2. Without the seed tie-break, entries knocked out in the same round
-  // would be ranked by the order their matches happened to be reported, which
-  // is arbitrary and would hand out points accordingly.
-  const eliminated = [...state.eliminations]
-    .sort((a, b) => b.stage - a.stage || seed(a.entryId) - seed(b.entryId))
-    .map((e) => e.entryId);
-
-  const ranked = [...survivors, ...eliminated];
-
-  // The champion must lead, whatever else happened.
-  if (state.championEntryId) {
-    const index = ranked.indexOf(state.championEntryId);
-    if (index > 0) {
-      ranked.splice(index, 1);
-      ranked.unshift(state.championEntryId);
-    }
-  }
-
-  return ranked.map((entryId, index) => ({ entryId, placement: index + 1 }));
+): Placement[] {
+  return orderPlacements({
+    allEntries: bracket.slots.filter((id): id is string => id !== null),
+    eliminations: state.eliminations,
+    championEntryId: state.championEntryId,
+    // Seed number, not slot index — those differ, and using the slot index here
+    // ranked co-eliminated entries by bracket position instead of by strength.
+    seedOf: (entryId) => bracket.seedByEntry[entryId] ?? Number.MAX_SAFE_INTEGER,
+  });
 }
 
 /** Matches that should be in the queue right now. SPEC.md §7.1. */

@@ -130,33 +130,6 @@ export function computeStandings(
   return [...table.values()];
 }
 
-/** Head-to-head wins between two entries, from the played results only. */
-function headToHead(
-  a: string,
-  b: string,
-  matches: RoundRobinMatch[],
-  results: RoundRobinResult[],
-): { aWins: number; bWins: number } {
-  const byKey = new Map(matches.map((match) => [match.key, match]));
-  let aWins = 0;
-  let bWins = 0;
-
-  for (const result of results) {
-    const match = byKey.get(result.matchKey);
-    if (!match) continue;
-    const [x, y] = match.participants;
-    if (!((x === a && y === b) || (x === b && y === a))) continue;
-
-    const [scoreX, scoreY] = result.scores;
-    if (scoreX === scoreY) continue;
-    const winner = scoreX > scoreY ? x : y;
-    if (winner === a) aWins += 1;
-    else bWins += 1;
-  }
-
-  return { aWins, bWins };
-}
-
 export type RoundRobinPlacement = {
   entryId: string;
   placement: number;
@@ -187,56 +160,100 @@ export function resolveRoundRobin(
   manualOrder: string[] = [],
 ): RoundRobinOutcome {
   const standings = computeStandings(entryIds, matches, results);
-  const rank = new Map(standings.map((row) => [row.entryId, row]));
   const manualIndex = new Map(manualOrder.map((entryId, index) => [entryId, index]));
 
-  const sorted = [...standings].sort((a, b) => {
-    if (b.wins !== a.wins) return b.wins - a.wins;
-
-    const h2h = headToHead(a.entryId, b.entryId, matches, results);
-    if (h2h.aWins !== h2h.bWins) return h2h.bWins - h2h.aWins;
-
-    if (b.differential !== a.differential) return b.differential - a.differential;
-
-    const manualA = manualIndex.get(a.entryId);
-    const manualB = manualIndex.get(b.entryId);
-    if (manualA !== undefined && manualB !== undefined) return manualA - manualB;
-
-    // Stable, so the table does not reshuffle between polls while the admin is
-    // still deciding.
-    return a.entryId.localeCompare(b.entryId);
-  });
-
-  // Anything the rules left level needs the admin's coin flip.
-  const unresolvedTies: string[][] = [];
-  let group: string[] = [];
-
-  for (let i = 0; i < sorted.length; i += 1) {
-    const current = sorted[i];
-    const next = sorted[i + 1];
-    const tiedWithNext =
-      next !== undefined &&
-      current.wins === next.wins &&
-      current.differential === next.differential &&
-      headToHead(current.entryId, next.entryId, matches, results).aWins ===
-        headToHead(current.entryId, next.entryId, matches, results).bWins &&
-      !(manualIndex.has(current.entryId) && manualIndex.has(next.entryId));
-
-    if (tiedWithNext) {
-      if (group.length === 0) group.push(current.entryId);
-      group.push(next.entryId);
-    } else if (group.length > 0) {
-      unresolvedTies.push(group);
-      group = [];
-    }
+  /*
+   * Head-to-head is applied as a mini-table within each group tied on wins,
+   * not as a pairwise comparison.
+   *
+   * Pairwise looks simpler but is not transitive: three entries can beat each
+   * other in a cycle — A beat B, B beat C, C beat A — and a sort over a
+   * non-transitive comparator produces an order that depends on the comparison
+   * sequence rather than on any rule. Counting wins against only the other
+   * members of the tied group is the usual convention and always yields an
+   * order that can be explained out loud.
+   */
+  const byWins = new Map<number, Standing[]>();
+  for (const row of standings) {
+    byWins.set(row.wins, [...(byWins.get(row.wins) ?? []), row]);
   }
-  if (group.length > 0) unresolvedTies.push(group);
 
-  void rank;
+  const sorted: Standing[] = [];
+  const unresolvedTies: string[][] = [];
+
+  for (const wins of [...byWins.keys()].sort((a, b) => b - a)) {
+    const group = byWins.get(wins)!;
+    const miniWins = miniTableWins(group.map((row) => row.entryId), matches, results);
+
+    const ordered = [...group].sort((a, b) => {
+      const h2h = (miniWins.get(b.entryId) ?? 0) - (miniWins.get(a.entryId) ?? 0);
+      if (h2h !== 0) return h2h;
+
+      if (b.differential !== a.differential) return b.differential - a.differential;
+
+      const manualA = manualIndex.get(a.entryId);
+      const manualB = manualIndex.get(b.entryId);
+      if (manualA !== undefined && manualB !== undefined) return manualA - manualB;
+
+      // Stable, so the table does not reshuffle between polls while the admin
+      // is still deciding.
+      return a.entryId.localeCompare(b.entryId);
+    });
+
+    sorted.push(...ordered);
+
+    // Anything the rules left level needs the admin's coin flip (SPEC.md §6.3).
+    let run: string[] = [];
+    for (let i = 0; i < ordered.length; i += 1) {
+      const current = ordered[i];
+      const next = ordered[i + 1];
+      const level =
+        next !== undefined &&
+        (miniWins.get(current.entryId) ?? 0) === (miniWins.get(next.entryId) ?? 0) &&
+        current.differential === next.differential &&
+        !(manualIndex.has(current.entryId) && manualIndex.has(next.entryId));
+
+      if (level) {
+        if (run.length === 0) run.push(current.entryId);
+        run.push(next.entryId);
+      } else if (run.length > 0) {
+        unresolvedTies.push(run);
+        run = [];
+      }
+    }
+    if (run.length > 0) unresolvedTies.push(run);
+  }
 
   return {
     standings: sorted,
     placements: sorted.map((row, index) => ({ entryId: row.entryId, placement: index + 1 })),
     unresolvedTies,
   };
+}
+
+/** Wins each entry has against only the other members of the group. */
+function miniTableWins(
+  group: string[],
+  matches: RoundRobinMatch[],
+  results: RoundRobinResult[],
+): Map<string, number> {
+  const inGroup = new Set(group);
+  const wins = new Map<string, number>(group.map((entryId) => [entryId, 0]));
+  const byKey = new Map(matches.map((match) => [match.key, match]));
+
+  for (const result of results) {
+    const match = byKey.get(result.matchKey);
+    if (!match) continue;
+
+    const [a, b] = match.participants;
+    if (!inGroup.has(a) || !inGroup.has(b)) continue;
+
+    const [scoreA, scoreB] = result.scores;
+    if (scoreA === scoreB) continue;
+
+    const winner = scoreA > scoreB ? a : b;
+    wins.set(winner, (wins.get(winner) ?? 0) + 1);
+  }
+
+  return wins;
 }
