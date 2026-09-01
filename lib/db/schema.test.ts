@@ -69,19 +69,38 @@ async function attempt(...statements: string[]): Promise<Attempt> {
   }
 }
 
-async function expectRejected(sql: string, mentioning: string) {
-  const result = await attempt(sql);
-  assert.equal(result.ok, false, `expected rejection of: ${sql}`);
+async function expectRejected(sql: string | string[], mentioning: string) {
+  const statements = Array.isArray(sql) ? sql : [sql];
+  const subject = statements.at(-1) ?? '';
+  const result = await attempt(...statements);
+  assert.equal(result.ok, false, `expected rejection of: ${subject}`);
   assert.ok(
     !result.ok && result.error.includes(mentioning),
     `expected error mentioning "${mentioning}", got: ${!result.ok ? result.error : ''}`,
   );
 }
 
-async function expectAccepted(sql: string) {
-  const result = await attempt(sql);
-  assert.ok(result.ok, `expected acceptance of: ${sql}\n${!result.ok ? result.error : ''}`);
+async function expectAccepted(sql: string | string[]) {
+  const statements = Array.isArray(sql) ? sql : [sql];
+  const result = await attempt(...statements);
+  assert.ok(
+    result.ok,
+    `expected acceptance of: ${statements.at(-1) ?? ''}\n${!result.ok ? result.error : ''}`,
+  );
 }
+
+/*
+ * Draft state is ambient: the roster seed leaves it empty, but `npm run db:demo`
+ * followed by `npm run db:dry-run` leaves a completed draft behind, and then
+ * "claim pick 13" collides with whoever already has it. These tests are about
+ * the constraints, not about who happens to be drafted, so each one clears the
+ * picks first inside its own transaction. The transaction always rolls back, so
+ * no real draft is touched.
+ *
+ * They passed before only because the database under test happened to be
+ * undrafted. That is exactly the kind of accidental green CLAUDE.md warns about.
+ */
+const CLEAR_PICKS = 'update players set draft_pick_number = null';
 
 describe('points are derived, never stored (CLAUDE.md invariant 1)', () => {
   it('has no stored points column anywhere', async () => {
@@ -115,19 +134,21 @@ describe('is_mister_irrelevant (SPEC.md §1.1, §4.1)', () => {
   });
 
   it('turns on for pick 13 and only pick 13', async () => {
-    const result = await attempt(`
-      update players set draft_pick_number = 13
-      where id = (select id from players where not is_captain limit 1)
-      returning draft_pick_number, is_mister_irrelevant
-    `);
+    const result = await attempt(
+      CLEAR_PICKS,
+      `update players set draft_pick_number = 13
+       where id = (select id from players where not is_captain limit 1)
+       returning draft_pick_number, is_mister_irrelevant`,
+    );
     assert.ok(result.ok);
     assert.deepEqual(result.rows, [{ draft_pick_number: 13, is_mister_irrelevant: true }]);
 
-    const twelve = await attempt(`
-      update players set draft_pick_number = 12
-      where id = (select id from players where not is_captain limit 1)
-      returning is_mister_irrelevant
-    `);
+    const twelve = await attempt(
+      CLEAR_PICKS,
+      `update players set draft_pick_number = 12
+       where id = (select id from players where not is_captain limit 1)
+       returning is_mister_irrelevant`,
+    );
     assert.ok(twelve.ok);
     assert.deepEqual(twelve.rows, [{ is_mister_irrelevant: false }]);
   });
@@ -135,6 +156,7 @@ describe('is_mister_irrelevant (SPEC.md §1.1, §4.1)', () => {
   // Undoing pick 13 has to clear the label with no extra code.
   it('clears when the pick is undone', async () => {
     const result = await attempt(
+      CLEAR_PICKS,
       `update players set draft_pick_number = 13
        where id = (select id from players where not is_captain order by id limit 1)`,
       `select count(*)::int as flagged from players where is_mister_irrelevant`,
@@ -145,8 +167,8 @@ describe('is_mister_irrelevant (SPEC.md §1.1, §4.1)', () => {
 
     // True while pick 13 stands, false once it is undone. Asserting both rules
     // out a column that is simply always false.
-    assert.deepEqual(result.all[1], [{ flagged: 1 }], 'should be flagged while pick 13 stands');
-    assert.deepEqual(result.all[3], [{ flagged: 0 }], 'should clear when the pick is undone');
+    assert.deepEqual(result.all[2], [{ flagged: 1 }], 'should be flagged while pick 13 stands');
+    assert.deepEqual(result.all[4], [{ flagged: 0 }], 'should clear when the pick is undone');
   });
 
   // SPEC.md §1.1: the label "cannot be edited away".
@@ -162,7 +184,7 @@ describe('is_mister_irrelevant (SPEC.md §1.1, §4.1)', () => {
 describe('players constraints', () => {
   it('refuses to draft a captain', async () => {
     await expectRejected(
-      `update players set draft_pick_number = 1 where is_captain`,
+      [CLEAR_PICKS, `update players set draft_pick_number = 1 where is_captain`],
       'players_captains_are_not_drafted',
     );
   });
@@ -170,19 +192,25 @@ describe('players constraints', () => {
   it('holds draft picks to 1-13 and keeps them unique', async () => {
     const anyone = `(select id from players where not is_captain limit 1)`;
     await expectRejected(
-      `update players set draft_pick_number = 14 where id = ${anyone}`,
+      [CLEAR_PICKS, `update players set draft_pick_number = 14 where id = ${anyone}`],
       'players_draft_pick_number_range',
     );
     await expectRejected(
-      `update players set draft_pick_number = 0 where id = ${anyone}`,
+      [CLEAR_PICKS, `update players set draft_pick_number = 0 where id = ${anyone}`],
       'players_draft_pick_number_range',
     );
     await expectRejected(
-      `update players set draft_pick_number = 1
-       where id in (select id from players where not is_captain limit 2)`,
+      [
+        CLEAR_PICKS,
+        `update players set draft_pick_number = 1
+         where id in (select id from players where not is_captain limit 2)`,
+      ],
       'players_draft_pick_number_key',
     );
-    await expectAccepted(`update players set draft_pick_number = 13 where id = ${anyone}`);
+    await expectAccepted([
+      CLEAR_PICKS,
+      `update players set draft_pick_number = 13 where id = ${anyone}`,
+    ]);
   });
 
   it('holds scouting ratings to 1-100', async () => {

@@ -262,7 +262,7 @@ function Shell({ children }: { children: React.ReactNode }) {
       <header className="flex items-center gap-3">
         <EventMark size={52} />
         <div>
-          <p className="eyebrow">Three days &middot; four teams &middot; seventeen</p>
+          <p className="eyebrow">Three days &middot; four teams &middot; seventeen players</p>
           <h1 className="display mt-0.5 text-[2.1rem]">kfless games</h1>
         </div>
       </header>

@@ -76,31 +76,40 @@ export function PlayerPool({
         </p>
       )}
 
-      <input
-        type="search"
-        value={query}
-        onChange={(event) => setQuery(event.target.value)}
-        placeholder="Search name, nickname, hometown"
-        aria-label="Search the player pool"
-        className="field"
-      />
+      {/*
+        Search and sort only once there is something to search. After the last
+        pick the pool is empty for the rest of the event, and leaving two dead
+        controls on the page reads as a section that failed to load.
+      */}
+      {pool.length > 0 && (
+        <>
+          <input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search name, nickname, hometown"
+            aria-label="Search the player pool"
+            className="field"
+          />
 
-      <label className="flex items-center gap-2 text-base">
-        <span className="font-black uppercase tracking-wide">Sort</span>
-        <select
-          value={sort}
-          onChange={(event) => setSort(event.target.value as SortKey)}
-          className="field flex-1"
-        >
-          <option value="overall">Overall (self-reported)</option>
-          <option value="name">Name</option>
-          {RATING_FIELDS.map(({ key, label }) => (
-            <option key={key} value={key}>
-              {label}
-            </option>
-          ))}
-        </select>
-      </label>
+          <label className="flex items-center gap-2 text-base">
+            <span className="font-black uppercase tracking-wide">Sort</span>
+            <select
+              value={sort}
+              onChange={(event) => setSort(event.target.value as SortKey)}
+              className="field flex-1"
+            >
+              <option value="overall">Overall (self-reported)</option>
+              <option value="name">Name</option>
+              {RATING_FIELDS.map(({ key, label }) => (
+                <option key={key} value={key}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </>
+      )}
 
       {shown.length === 0 && (
         <p className="text-base text-muted">

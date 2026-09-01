@@ -53,6 +53,17 @@ export default async function MePage() {
         }
       />
 
+      {/*
+        SPEC.md §1.1: the label "is displayed on their profile card and roster
+        row". The roster row is on the draft page; this is the card.
+      */}
+      {me.isMisterIrrelevant && (
+        <p className="card-hot flex flex-wrap items-center gap-2 text-base font-bold">
+          <span className="chip chip-amber">Mister Irrelevant</span>
+          Pick {me.draftPickNumber} — the last pick of the draft. It cannot be edited away.
+        </p>
+      )}
+
       {!me.profileComplete && (
         <p className="card-hot text-base font-bold">
           Your card isn&apos;t finished — it needs a photo, all eight ratings and a scouting

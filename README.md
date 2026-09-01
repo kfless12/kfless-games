@@ -69,7 +69,7 @@ docker compose up --build
 | `npm run db:seed` | Seed the roster from `scripts/seed-data.ts` |
 | `npm run db:reset` | Wipe and reseed (`SEED_RESET=1`) |
 | `npm run db:demo` | Wipe, reseed, **and** fill placeholder avatars/bios/ratings |
-| `npm run db:dry-run` | Demo seed **plus** a played-out 3-day event, for looking at the UI |
+| `npm run db:dry-run` | A completed draft **plus** a played-out 3-day event, for looking at the UI |
 | `npm run db:studio` | Drizzle Studio |
 
 ## Layout
@@ -192,9 +192,14 @@ finished game showing a match still waiting reads as an unfinished game.
 npm run db:dry-run
 ```
 
-Plays a whole three-day event from a fixed seed: 6 games across all four
-formats, 32 matches, 30 played, one left live so the queue and the "you're up"
-banner have something in them. Deterministic, so a rerun gives identical data.
+Runs the draft to completion and then plays a whole three-day event from a fixed
+seed: 13 picks in snake order, 6 games across all four formats, 32 matches, 30
+played, one left live so the queue and the "you're up" banner have something in
+them. Deterministic, so a rerun gives identical data.
+
+The draft order comes from `lib/draft.ts`, not from anything invented in the
+script, so the seeded board is the same snake order a live draft would produce —
+position 4 ends up with picks 4, 5, 12 and 13, and five players.
 
 ## Tests
 
@@ -336,6 +341,11 @@ Snake order per SPEC.md §1.1: 13 picks over 4 teams, and position 4 takes pick
 column so it cannot be edited away and clears itself if the pick is undone.
 
 There is no clock, no auto-pick, and no draft-order randomizer (SPEC.md §12).
+
+Once the draft is complete the draft page is the rosters-and-order view: each
+team with its picks numbered, and the full pick history from #13 back to #1.
+The Mister Irrelevant label appears on the roster row, in the pick history, and
+on the profile card — SPEC.md §1.1 requires the first and last of those.
 
 Every mutation takes a row lock on `event_state` first, so two captains tapping
 DRAFT at the same instant cannot both claim the same pick number. Claiming a

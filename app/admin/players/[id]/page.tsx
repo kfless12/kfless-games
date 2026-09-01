@@ -46,6 +46,14 @@ export default async function AdminPlayerPage({
         }
       />
 
+      {/* Same label as the player's own card — SPEC.md §1.1. */}
+      {player.isMisterIrrelevant && (
+        <p className="card-hot flex flex-wrap items-center gap-2 text-base font-bold">
+          <span className="chip chip-amber">Mister Irrelevant</span>
+          Pick {player.draftPickNumber} — the last pick of the draft.
+        </p>
+      )}
+
       <ProfileForm
         playerId={player.id}
         subtitle={player.email}
