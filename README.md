@@ -427,11 +427,31 @@ npm run cf:deploy
 ```
 
 Use the **direct** (non-pooling) URL for migrations and seeding, and the
-**pooling** URL for the Worker secret. Then get the admin's join link:
+**pooling** URL for the Worker secret.
+
+### Getting in as admin once it is deployed
+
+There is no admin PIN to look up. ADMIN comes from `players.is_admin`, so the
+admin's **own magic link is their admin access** — and `/admin` then lists
+everyone else's links and 6-digit codes.
+
+To read the admin's link and code out of the deployed database. Put the URL
+inline; the compose Postgres container is only being borrowed for its `psql`:
 
 ```bash
-DATABASE_URL='<direct url>' docker compose exec -T db psql "$DATABASE_URL" -tAc "select '/join/'||c.token from credentials c join players p on p.id=c.player_id where p.is_admin and c.revoked_at is null"
+docker compose exec -T db psql '<direct url>' -tAc "select p.full_name||'  link=/join/'||c.token||'  code='||c.join_code from credentials c join players p on p.id=c.player_id where p.is_admin and c.revoked_at is null"
 ```
+
+Do **not** write this as `DATABASE_URL='<url>' ... psql "$DATABASE_URL"`. The
+shell expands `$DATABASE_URL` before the prefix assignment takes effect, so that
+form silently queries whatever the variable already held — usually your local
+database — and hands you a token that does not work on the deployed site.
+
+`ADMIN_CREDENTIAL` is a different thing and is **not discoverable**: you choose
+it, Cloudflare stores it write-only (`wrangler secret list` shows names, not
+values), and `elevateToAdmin()` requires you to be signed in already, so it is
+break-glass for a device that does not know it is the admin — not a login. If
+you forget it, overwrite it with `npx wrangler secret put ADMIN_CREDENTIAL`.
 
 To try it locally in `workerd` first, copy `.dev.vars.example` to `.dev.vars`
 and run `npm run cf:preview`.
