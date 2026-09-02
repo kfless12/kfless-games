@@ -3,9 +3,10 @@
  *
  * SPEC.md §7.4. A preview reading "Team One — A vs Team Two — B" tells you
  * almost nothing at a glance and does not fit a phone; what people want to know
- * is who is actually playing. So a preview shows the team tag plus the initials
- * of the assigned players, and falls back gracefully when nobody is assigned —
- * SPEC.md §4.4 makes assignment optional and it will often be skipped.
+ * is who is actually playing. So a preview shows the team tag plus the first
+ * names of the assigned players, and falls back gracefully when nobody is
+ * assigned — SPEC.md §4.4 makes assignment optional and it will often be
+ * skipped.
  *
  * The team tag comes from `teams.draft_position`, never from the entry label.
  * Labels are snapshots taken when the tournament was generated (see
@@ -34,16 +35,38 @@ export function entryLetter(label: string | null): string | null {
   return match ? match[1] : null;
 }
 
-/**
- * "Kevin Flessa" -> "KF". A single name gives its first two letters, so a
- * one-word name still produces a two-character tag rather than a lone letter
- * that could belong to anyone.
- */
-export function initialsOf(fullName: string): string {
+/** "Kevin Flessa" -> "Kevin". What people are actually called. */
+export function firstNameOf(fullName: string): string {
   const words = fullName.trim().split(/\s+/).filter(Boolean);
-  if (words.length === 0) return '?';
-  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
-  return (words[0][0] + words[words.length - 1][0]).toUpperCase();
+  return words[0] ?? '?';
+}
+
+/** "Kevin Flessa" -> "F". Empty when there is no surname to take. */
+function lastInitialOf(fullName: string): string {
+  const words = fullName.trim().split(/\s+/).filter(Boolean);
+  return words.length > 1 ? words[words.length - 1][0].toUpperCase() : '';
+}
+
+/**
+ * First names for a set of players, disambiguated only where they collide.
+ *
+ * Two Mikes in one entry would otherwise render "Mike/Mike", which is worse
+ * than useless — it names nobody. When first names clash a last initial is
+ * added, and only to the names that clash, so the common case stays short.
+ */
+export function displayNames(fullNames: string[]): string[] {
+  const counts = new Map<string, number>();
+  for (const name of fullNames) {
+    const first = firstNameOf(name);
+    counts.set(first, (counts.get(first) ?? 0) + 1);
+  }
+
+  return fullNames.map((name) => {
+    const first = firstNameOf(name);
+    if ((counts.get(first) ?? 0) < 2) return first;
+    const initial = lastInitialOf(name);
+    return initial ? `${first} ${initial}` : first;
+  });
 }
 
 /** "T1", or null when the draft position is unknown. */
@@ -56,7 +79,7 @@ export function teamTag(draftPosition: number | null): string | null {
  *
  * - Whole-team game (one entry per team): the team name. There is no ambiguity
  *   to resolve, and the name is what people call it.
- * - Players assigned: "T1 KF/JD".
+ * - Players assigned: "T1 Kevin/Jake", or "T1 Mike D/Mike S" if they collide.
  * - Nobody assigned: "T1-A".
  * - Anything unknown: the stored label, or a dash.
  */
@@ -66,8 +89,8 @@ export function shortEntryLabel(entry: EntryIdentity, wholeTeam: boolean): strin
   const tag = teamTag(entry.teamDraftPosition);
 
   if (entry.playerNames.length > 0) {
-    const initials = entry.playerNames.map(initialsOf).join('/');
-    return tag ? `${tag} ${initials}` : initials;
+    const names = displayNames(entry.playerNames).join('/');
+    return tag ? `${tag} ${names}` : names;
   }
 
   const letter = entryLetter(entry.label);

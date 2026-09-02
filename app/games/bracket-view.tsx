@@ -19,7 +19,7 @@ import type { MatchCardData } from './match-card';
 type Column = { round: number; label: string; matches: MatchCardData[] };
 
 /*
- * Bracket cells use the short entry form (SPEC.md §7.4) — "T1 KF/JD", or
+ * Bracket cells use the short entry form (SPEC.md §7.4) — "T1 Kevin/Jake", or
  * "T1-A" before a captain assigns anyone. A full label reads "Team Three — B",
  * which does not fit a column at 390px and truncates to "Team Three …",
  * dropping the half that tells the two entries apart. Full labels stay on the
@@ -75,7 +75,7 @@ export function BracketView({ matches }: { matches: MatchCardData[] }) {
             <div className="-mx-1 overflow-x-auto overscroll-x-contain px-1 pb-2">
               <div className="flex min-w-max gap-3">
                 {columns.map((column) => (
-                  <div key={column.round} className="flex w-[10.5rem] flex-col gap-2">
+                  <div key={column.round} className="flex w-[13rem] flex-col gap-2">
                     {/* Sticky round header, per SPEC.md §11. */}
                     <div className="sticky top-0 z-10 rounded-md border-2 border-ink bg-amber-bright px-2 py-1 text-center text-xs font-black uppercase tracking-wider">
                       {column.label}
@@ -135,8 +135,15 @@ function BracketCell({ match }: { match: MatchCardData }) {
               ) : (
                 <span aria-hidden className="w-[10px] shrink-0" />
               )}
+              {/*
+                Wraps rather than truncates. Names are as long as the roster
+                makes them — "Mike D/Mike S" is a realistic worst case — and a
+                clipped name is the exact failure the short form exists to
+                avoid. Two lines in a taller cell is the cheaper trade, and the
+                column is inside a horizontal scroller (§11) so width is free.
+              */}
               <span
-                className={`min-w-0 flex-1 truncate ${
+                className={`min-w-0 flex-1 leading-tight break-words ${
                   side.isWinner === true ? 'font-black' : side.isWinner === false ? 'text-muted' : ''
                 }`}
                 title={side.label ?? undefined}

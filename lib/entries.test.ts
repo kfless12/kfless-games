@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { entryLetter, initialsOf, shortEntryLabel, teamTag } from './entries';
+import { displayNames, entryLetter, firstNameOf, shortEntryLabel, teamTag } from './entries';
 
 describe('entryLetter', () => {
   it('takes the letter off a generated label', () => {
@@ -25,22 +25,47 @@ describe('entryLetter', () => {
   });
 });
 
-describe('initialsOf', () => {
-  it('uses first and last initial', () => {
-    assert.equal(initialsOf('Kevin Flessa'), 'KF');
+describe('firstNameOf', () => {
+  it('takes the first name', () => {
+    assert.equal(firstNameOf('Kevin Flessa'), 'Kevin');
+    assert.equal(firstNameOf('Mary Jane Watson'), 'Mary');
   });
 
-  it('skips middle names rather than running them together', () => {
-    assert.equal(initialsOf('Mary Jane Watson'), 'MW');
-  });
-
-  it('gives a one-word name two letters, not one', () => {
-    assert.equal(initialsOf('Madonna'), 'MA');
+  it('handles a one-word name', () => {
+    assert.equal(firstNameOf('Madonna'), 'Madonna');
   });
 
   it('survives extra whitespace and empty input', () => {
-    assert.equal(initialsOf('  Kevin   Flessa  '), 'KF');
-    assert.equal(initialsOf('   '), '?');
+    assert.equal(firstNameOf('  Kevin   Flessa  '), 'Kevin');
+    assert.equal(firstNameOf('   '), '?');
+  });
+});
+
+describe('displayNames', () => {
+  it('leaves distinct first names alone', () => {
+    assert.deepEqual(displayNames(['Kevin Flessa', 'Jake Dean']), ['Kevin', 'Jake']);
+  });
+
+  it('adds a last initial only to the names that collide', () => {
+    // Two Mikes must not both render "Mike" — that names nobody. Ada is
+    // untouched, so the common case stays short.
+    assert.deepEqual(
+      displayNames(['Mike Doyle', 'Mike Sanders', 'Ada Byron']),
+      ['Mike D', 'Mike S', 'Ada'],
+    );
+  });
+
+  it('is case-sensitive about the collision, not the initial', () => {
+    assert.deepEqual(displayNames(['Sam Ortiz', 'Sam okafor']), ['Sam O', 'Sam O']);
+  });
+
+  it('cannot disambiguate two identical one-word names, and says so honestly', () => {
+    // No surname to take. Better to repeat than to invent a letter.
+    assert.deepEqual(displayNames(['Madonna', 'Madonna']), ['Madonna', 'Madonna']);
+  });
+
+  it('is empty for no players', () => {
+    assert.deepEqual(displayNames([]), []);
   });
 });
 
@@ -67,10 +92,17 @@ describe('shortEntryLabel', () => {
     );
   });
 
-  it('uses tag plus initials once players are assigned', () => {
+  it('uses tag plus first names once players are assigned', () => {
     assert.equal(
       shortEntryLabel({ ...base, playerNames: ['Kevin Flessa', 'Jake Dean'] }, false),
-      'T1 KF/JD',
+      'T1 Kevin/Jake',
+    );
+  });
+
+  it('disambiguates two players in the entry who share a first name', () => {
+    assert.equal(
+      shortEntryLabel({ ...base, playerNames: ['Mike Doyle', 'Mike Sanders'] }, false),
+      'T1 Mike D/Mike S',
     );
   });
 
@@ -84,7 +116,7 @@ describe('shortEntryLabel', () => {
     const before = shortEntryLabel(base, false);
     const after = shortEntryLabel({ ...base, playerNames: ['Ada Byron'] }, false);
     assert.equal(before, 'T1-A');
-    assert.equal(after, 'T1 AB');
+    assert.equal(after, 'T1 Ada');
     assert.notEqual(before, after);
   });
 
@@ -96,7 +128,7 @@ describe('shortEntryLabel', () => {
         { ...base, teamName: 'The New Name', playerNames: ['Kevin Flessa'] },
         false,
       ),
-      'T1 KF',
+      'T1 Kevin',
     );
   });
 

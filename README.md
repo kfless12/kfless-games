@@ -308,9 +308,19 @@ whole-team game or an unassigned entry.
 
 ### Short entry labels
 
-Previews and bracket cells read `T1 KF/JD` — team tag plus assigned players'
-initials — falling back to `T1-A` when nobody is assigned, and to the plain team
-name in a whole-team game. `lib/entries.ts`, pure and tested.
+Previews and bracket cells read `T1 Kevin/Jake` — team tag plus the assigned
+players' first names — falling back to `T1-A` when nobody is assigned, and to
+the plain team name in a whole-team game. `lib/entries.ts`, pure and tested.
+
+Two players in one entry sharing a first name each get a last initial
+(`T1 Mike D/Mike S`), and only those two do. Bracket cells wrap instead of
+truncating, and the columns are 13rem to suit real names — a clipped name is the
+exact failure the short form exists to prevent.
+
+**Placeholder-roster caveat:** every seeded name is "Player Seven" / "Captain
+One", so first names all render as "Player" or "Captain". The format is right
+for real names; the demo data is what makes it read badly. Replacing the roster
+in `scripts/seed-data.ts` fixes it.
 
 The tag comes from `teams.draft_position`, never from the stored entry label:
 labels are snapshots taken at generation time, and a captain renaming the team

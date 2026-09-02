@@ -405,9 +405,13 @@ widen that back out, both deliberate:
 - an entry with **nobody assigned** nudges the whole team, because assignment is
   optional and the alternative is telling nobody.
 
-**Short entry labels.** Previews and bracket cells show `T1 KF/JD` — team tag by
-draft position, plus the initials of the assigned players — falling back to
-`T1-A` when nobody is assigned, and to the plain team name in a whole-team game.
+**Short entry labels.** Previews and bracket cells show `T1 Kevin/Jake` — team
+tag by draft position, plus the first names of the assigned players — falling
+back to `T1-A` when nobody is assigned, and to the plain team name in a
+whole-team game. Two players in one entry who share a first name get a last
+initial each (`T1 Mike D/Mike S`), and only those two do, so the common case
+stays short. Bracket cells wrap rather than truncate: a clipped name is the
+exact failure the short form exists to prevent.
 A full label reads "Team One — A vs Team Two — B", which says little at a glance
 and does not fit a phone. The tag comes from `teams.draft_position`, never from
 the stored label: labels are snapshots from generation time and a captain can
