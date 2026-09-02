@@ -320,6 +320,64 @@ async function main() {
     );
   }
 
+  /*
+   * Fill in lineups for the multi-entry games (SPEC.md §4.4), so the demo data
+   * actually shows the feature: short labels read "T1 KF/JD" instead of "T1-A",
+   * and the "you're up" nudge is targeted at people rather than whole teams.
+   *
+   * Whole-team games are left alone — there is nothing to divide up, and §7.4
+   * nudges the whole team there regardless.
+   */
+  async function assignLineups() {
+    const multiEntry = await db
+      .select({ id: games.id, name: games.name, entrySize: games.entrySize })
+      .from(games)
+      .where(sql`${games.entriesPerTeam} > 1`);
+
+    let filled = 0;
+
+    for (const game of multiEntry) {
+      const gameEntries = await db
+        .select({ id: entries.id, teamId: entries.teamId, label: entries.label })
+        .from(entries)
+        .where(eq(entries.gameId, game.id))
+        .orderBy(asc(entries.label));
+
+      // Roster per team, in draft order so the assignment is deterministic.
+      const byTeam = new Map<string, string[]>();
+      for (const entry of gameEntries) {
+        if (byTeam.has(entry.teamId)) continue;
+        const roster = await db
+          .select({ id: players.id })
+          .from(players)
+          .where(eq(players.teamId, entry.teamId))
+          .orderBy(asc(players.draftPickNumber), asc(players.fullName));
+        byTeam.set(
+          entry.teamId,
+          roster.map((row) => row.id),
+        );
+      }
+
+      const size = game.entrySize ?? 2;
+      const takenByTeam = new Map<string, number>();
+
+      for (const entry of gameEntries) {
+        const roster = byTeam.get(entry.teamId) ?? [];
+        const from = takenByTeam.get(entry.teamId) ?? 0;
+        const slice = roster.slice(from, from + size);
+        if (slice.length === 0) continue;
+
+        takenByTeam.set(entry.teamId, from + slice.length);
+        await db.update(entries).set({ playerIds: slice }).where(eq(entries.id, entry.id));
+        filled += 1;
+      }
+    }
+
+    console.log(`assigned lineups for ${filled} entries`);
+  }
+
+  await assignLineups();
+
   const [summary] = await db
     .select({
       games: sql<number>`(select count(*)::int from games)`,
@@ -329,6 +387,7 @@ async function main() {
       live: sql<number>`(select count(*)::int from matches where status = 'IN_PROGRESS')`,
       results: sql<number>`(select count(*)::int from game_results)`,
       drafted: sql<number>`(select count(*)::int from players where draft_pick_number is not null)`,
+      lineups: sql<number>`(select count(*)::int from entries where player_ids is not null and cardinality(player_ids) > 0)`,
     })
     .from(sql`(select 1) as one`);
 
@@ -336,7 +395,6 @@ async function main() {
   console.log('dry run complete:', summary);
   console.log('Three days scheduled; one game left on so the queue has something to show.');
 
-  void entries;
   process.exit(0);
 }
 

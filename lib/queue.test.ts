@@ -6,8 +6,11 @@ import {
   buildStationQueues,
   compareQueueOrder,
   explainStartRefusal,
+  authorizeQueueStart,
   findMyMatches,
   findYoureUp,
+  isViewersMatch,
+  type QueueViewer,
   type MatchStatus,
   type QueueMatch,
   startableMatchIds,
@@ -29,12 +32,34 @@ function match(overrides: Partial<QueueMatch> = {}): QueueMatch {
     slot: 0,
     status: 'READY' as MatchStatus,
     queuePosition: null,
+    wholeTeamGame: false,
     sides: [
-      { entryId: 'e1', label: 'Team One — A', teamId: 'team-1', teamName: 'One', teamColor: '#f00' },
-      { entryId: 'e2', label: 'Team Two — A', teamId: 'team-2', teamName: 'Two', teamColor: '#00f' },
+      {
+        entryId: 'e1',
+        label: 'Team One — A',
+        shortLabel: 'T1-A',
+        teamId: 'team-1',
+        teamName: 'One',
+        teamColor: '#f00',
+        playerIds: [],
+      },
+      {
+        entryId: 'e2',
+        label: 'Team Two — A',
+        shortLabel: 'T2-A',
+        teamId: 'team-2',
+        teamName: 'Two',
+        teamColor: '#00f',
+        playerIds: [],
+      },
     ],
     ...overrides,
   };
+}
+
+/** A viewer on team-1 who is not assigned to any entry. */
+function viewer(teamId: string | null, personId = 'nobody'): QueueViewer {
+  return { personId, teamId };
 }
 
 describe('buildStationQueues', () => {
@@ -198,10 +223,12 @@ describe('bumpPositionFor', () => {
 
 describe('findYoureUp — SPEC.md §7.2', () => {
   const mine = 'team-1';
+  // `mine` is a team id (for side()); `me` is the viewer on that team.
+  const me = viewer(mine);
 
   it('fires for a match that is now playing', () => {
     const queues = buildStationQueues([match({ id: 'a', status: 'IN_PROGRESS' })]);
-    const hits = findYoureUp(queues, mine);
+    const hits = findYoureUp(queues, me);
     assert.equal(hits.length, 1);
     assert.equal(hits[0].slot, 'NOW_PLAYING');
     assert.equal(hits[0].match.id, 'a');
@@ -210,7 +237,7 @@ describe('findYoureUp — SPEC.md §7.2', () => {
 
   it('fires for a match that is on deck', () => {
     const queues = buildStationQueues([match({ id: 'a' })]);
-    const hits = findYoureUp(queues, mine);
+    const hits = findYoureUp(queues, me);
     assert.equal(hits.length, 1);
     assert.equal(hits[0].slot, 'ON_DECK');
   });
@@ -227,7 +254,7 @@ describe('findYoureUp — SPEC.md §7.2', () => {
     const [queue] = queues;
     assert.equal(queue.onDeck?.id, 'theirs');
     assert.equal(queue.inTheHole?.id, 'mine', 'the team must actually be in the hole');
-    assert.deepEqual(findYoureUp(queues, mine), []);
+    assert.deepEqual(findYoureUp(queues, me), []);
   });
 
   it('does not fire for a match further back than in the hole', () => {
@@ -237,7 +264,7 @@ describe('findYoureUp — SPEC.md §7.2', () => {
       match({ id: 'mine', slot: 2 }),
     ]);
     assert.deepEqual(queues[0].waiting.map((m) => m.id), ['mine']);
-    assert.deepEqual(findYoureUp(queues, mine), []);
+    assert.deepEqual(findYoureUp(queues, me), []);
   });
 
   it('fires at both stations when a team is up twice at once', () => {
@@ -245,14 +272,14 @@ describe('findYoureUp — SPEC.md §7.2', () => {
       match({ id: 'a', station: 'Pong Table', status: 'IN_PROGRESS' }),
       match({ id: 'b', station: 'Lawn' }),
     ]);
-    const hits = findYoureUp(queues, mine);
+    const hits = findYoureUp(queues, me);
     assert.equal(hits.length, 2, 'a team with two entries can be up in two places');
     assert.deepEqual(hits.map((h) => h.station).sort(), ['Lawn', 'Pong Table']);
   });
 
   it('is silent for a team that is not up, and for nobody signed in', () => {
     const queues = buildStationQueues([match({ id: 'a', status: 'IN_PROGRESS' })]);
-    assert.deepEqual(findYoureUp(queues, 'team-99'), []);
+    assert.deepEqual(findYoureUp(queues, viewer('team-99')), []);
     assert.deepEqual(findYoureUp(queues, null), []);
   });
 
@@ -261,7 +288,7 @@ describe('findYoureUp — SPEC.md §7.2', () => {
     const queues = buildStationQueues([
       match({ id: 'a', status: 'IN_PROGRESS', sides: [side(mine), side(mine)] }),
     ]);
-    assert.equal(findYoureUp(queues, mine).length, 1);
+    assert.equal(findYoureUp(queues, me).length, 1);
   });
 
   it('ignores an empty slot', () => {
@@ -269,21 +296,23 @@ describe('findYoureUp — SPEC.md §7.2', () => {
       match({
         id: 'a',
         status: 'IN_PROGRESS',
-        sides: [side(mine), { entryId: null, label: null, teamId: null, teamName: null, teamColor: null }],
+        sides: [side(mine), { entryId: null, label: null, shortLabel: null, teamId: null, teamName: null, teamColor: null, playerIds: [] }],
       }),
     ]);
-    assert.equal(findYoureUp(queues, mine).length, 1);
+    assert.equal(findYoureUp(queues, me).length, 1);
     assert.deepEqual(findYoureUp(queues, null), []);
   });
 });
 
-function side(teamId: string) {
+function side(teamId: string, playerIds: string[] = []) {
   return {
     entryId: `entry-${teamId}`,
     label: `Label ${teamId}`,
+    shortLabel: `S-${teamId}`,
     teamId,
     teamName: teamId,
     teamColor: '#000',
+    playerIds,
   };
 }
 
@@ -295,7 +324,7 @@ describe('findMyMatches — SPEC.md §7.2', () => {
       match({ id: 'theirs', round: 2, sides: [side('team-8'), side('team-9')] }),
     ];
     assert.deepEqual(
-      findMyMatches(matches, 'team-1').map((m) => m.id),
+      findMyMatches(matches, viewer('team-1')).map((m) => m.id),
       ['sooner', 'later'],
     );
   });
@@ -305,12 +334,12 @@ describe('findMyMatches — SPEC.md §7.2', () => {
       match({ id: 'pong', gameId: 'g1', gameName: 'Beer Pong', station: 'Patio', round: 2 }),
       match({ id: 'flip', gameId: 'g2', gameName: 'Flip Cup', station: 'Lawn', round: 1 }),
     ];
-    assert.deepEqual(findMyMatches(matches, 'team-1').map((m) => m.id), ['flip', 'pong']);
+    assert.deepEqual(findMyMatches(matches, viewer('team-1')).map((m) => m.id), ['flip', 'pong']);
   });
 
   it('leaves out matches whose slots are not filled yet', () => {
     const matches = [match({ id: 'pending', status: 'PENDING' })];
-    assert.deepEqual(findMyMatches(matches, 'team-1'), []);
+    assert.deepEqual(findMyMatches(matches, viewer('team-1')), []);
   });
 
   it('is empty for nobody signed in', () => {
@@ -405,3 +434,103 @@ describe('explainStartRefusal', () => {
     assert.ok(/not in the queue/.test(explainStartRefusal([], 'nope') ?? ''));
   });
 });
+
+/*
+ * SPEC.md §7.4. The banner is the only thing telling people to walk to a table,
+ * so a false positive trains them to ignore it and a false negative means they
+ * never show up. Both directions are asserted.
+ */
+describe('isViewersMatch — SPEC.md §7.4', () => {
+  const ALICE = 'p-alice';
+  const BOB = 'p-bob';
+
+  it('fires for a player assigned to an entry', () => {
+    const m = match({ sides: [side('team-1', [ALICE]), side('team-2', [BOB])] });
+    assert.equal(isViewersMatch(m, { personId: ALICE, teamId: 'team-1' }), true);
+  });
+
+  it('does not fire for a teammate who is not in this entry', () => {
+    // The whole point: a beer pong team fields two pairs, and the pair that is
+    // not playing must not be told to go to the table.
+    const m = match({ sides: [side('team-1', [ALICE]), side('team-2', [BOB])] });
+    assert.equal(isViewersMatch(m, { personId: 'p-carol', teamId: 'team-1' }), false);
+  });
+
+  it('falls back to the whole team when the entry has nobody assigned', () => {
+    // §4.4 makes assignment optional. Telling nobody would be worse.
+    const m = match({ sides: [side('team-1'), side('team-2')] });
+    assert.equal(isViewersMatch(m, { personId: 'p-carol', teamId: 'team-1' }), true);
+  });
+
+  it('narrows as soon as that entry is assigned', () => {
+    const before = match({ sides: [side('team-1'), side('team-2')] });
+    const after = match({ sides: [side('team-1', [ALICE]), side('team-2')] });
+    const carol = { personId: 'p-carol', teamId: 'team-1' };
+    assert.equal(isViewersMatch(before, carol), true, 'unassigned pings the team');
+    assert.equal(isViewersMatch(after, carol), false, 'assigning someone else must exclude her');
+  });
+
+  it('pings the whole team in a whole-team game even when players are named', () => {
+    // Everyone really is playing, so honouring the assignment would be wrong.
+    const m = match({
+      wholeTeamGame: true,
+      sides: [side('team-1', [ALICE]), side('team-2', [BOB])],
+    });
+    assert.equal(isViewersMatch(m, { personId: 'p-carol', teamId: 'team-1' }), true);
+  });
+
+  it('still ignores the other team in a whole-team game', () => {
+    const m = match({ wholeTeamGame: true, sides: [side('team-1'), side('team-2')] });
+    assert.equal(isViewersMatch(m, { personId: 'p-dave', teamId: 'team-9' }), false);
+  });
+
+  it('fires on the assignment even if the viewer has no team recorded', () => {
+    const m = match({ sides: [side('team-1', [ALICE]), side('team-2', [BOB])] });
+    assert.equal(isViewersMatch(m, { personId: ALICE, teamId: null }), true);
+  });
+
+  it('is false for nobody signed in', () => {
+    assert.equal(isViewersMatch(match(), null), false);
+  });
+
+  it('ignores an empty bracket slot', () => {
+    const m = match({
+      sides: [
+        side('team-1', [ALICE]),
+        {
+          entryId: null,
+          label: null,
+          shortLabel: null,
+          teamId: null,
+          teamName: null,
+          teamColor: null,
+          playerIds: [],
+        },
+      ],
+    });
+    assert.equal(isViewersMatch(m, { personId: 'p-carol', teamId: null }), false);
+  });
+});
+
+describe('authorizeQueueStart — SPEC.md §7.1', () => {
+  it('allows the admin', () => {
+    assert.equal(authorizeQueueStart({ role: 'ADMIN' }).allowed, true);
+  });
+
+  it('allows any team captain, not only one playing in the match', () => {
+    assert.equal(authorizeQueueStart({ role: 'CAPTAIN' }).allowed, true);
+  });
+
+  it('refuses a plain player', () => {
+    const verdict = authorizeQueueStart({ role: 'PLAYER' });
+    assert.equal(verdict.allowed, false);
+    assert.ok(/captain/i.test(verdict.reason ?? ''));
+  });
+
+  it('refuses nobody signed in', () => {
+    const verdict = authorizeQueueStart(null);
+    assert.equal(verdict.allowed, false);
+    assert.ok(/sign in/i.test(verdict.reason ?? ''));
+  });
+});
+

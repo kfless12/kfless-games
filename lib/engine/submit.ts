@@ -44,36 +44,64 @@ export type MatchAuthorization = {
   reason?: string;
 };
 
+/** What the decision needs to know about one entry in the match. */
+export type MatchEntryFacts = {
+  teamId: string;
+  /** Players the captain assigned to this entry. Empty when unassigned (§4.4). */
+  playerIds: string[];
+};
+
 /**
- * SPEC.md §8: admin, or a captain of either team in the match.
+ * SPEC.md §8: admin, a captain of either team in the match, and — for games
+ * played by part of a team — any player assigned to an entry in it.
+ *
+ * The player clause is a deliberate widening of the original "admin or either
+ * captain". A beer pong match is two named pairs; making four people find a
+ * captain to write down cups is friction, and §8's whole argument is that
+ * concentrating result entry in one person is the failure mode to avoid.
+ *
+ * A whole-team game stays captain-only, because "the team" is not a person:
+ * every player is in it, so widening to players would mean anyone on either
+ * side could score it, and nobody would be accountable for the number.
+ *
+ * Assignment is optional (§4.4) and will often be skipped, so captains keep
+ * their rights unconditionally. An unassigned entry therefore behaves exactly
+ * as it does today rather than becoming a match nobody can score.
  *
  * Pure decision, given the facts. The caller supplies them from a locked read.
  */
 export function authorizeSubmission(input: {
   identity: Identity | null;
-  teamIdsInMatch: string[];
+  entriesInMatch: MatchEntryFacts[];
   captainTeamId: string | null;
+  /** True when one entry is the whole team — games.entries_per_team === 1. */
+  wholeTeamGame: boolean;
 }): MatchAuthorization {
-  const { identity, teamIdsInMatch, captainTeamId } = input;
+  const { identity, entriesInMatch, captainTeamId, wholeTeamGame } = input;
+  const teamIds = [...new Set(entriesInMatch.map((entry) => entry.teamId))];
 
   if (!identity) {
-    return { allowed: false, teamIds: teamIdsInMatch, reason: 'Sign in first.' };
+    return { allowed: false, teamIds, reason: 'Sign in first.' };
   }
   if (identity.role === 'ADMIN') {
-    return { allowed: true, teamIds: teamIdsInMatch };
+    return { allowed: true, teamIds };
+  }
+  if (identity.role === 'CAPTAIN' && captainTeamId !== null && teamIds.includes(captainTeamId)) {
+    return { allowed: true, teamIds };
   }
   if (
-    identity.role === 'CAPTAIN' &&
-    captainTeamId !== null &&
-    teamIdsInMatch.includes(captainTeamId)
+    !wholeTeamGame &&
+    entriesInMatch.some((entry) => entry.playerIds.includes(identity.personId))
   ) {
-    return { allowed: true, teamIds: teamIdsInMatch };
+    return { allowed: true, teamIds };
   }
 
   return {
     allowed: false,
-    teamIds: teamIdsInMatch,
-    reason: 'Only the admin or a captain playing in this match can report it.',
+    teamIds,
+    reason: wholeTeamGame
+      ? 'Only the admin or a captain playing in this match can report it.'
+      : 'Only the admin, a captain, or a player in this match can report it.',
   };
 }
 
@@ -87,13 +115,13 @@ async function lockGame(tx: Tx, gameId: string) {
   return game;
 }
 
-async function teamIdsInMatch(tx: Tx, matchId: string): Promise<string[]> {
+async function entryFactsInMatch(tx: Tx, matchId: string): Promise<MatchEntryFacts[]> {
   const rows = await tx
-    .select({ teamId: entries.teamId })
+    .select({ teamId: entries.teamId, playerIds: entries.playerIds })
     .from(matchParticipants)
     .innerJoin(entries, eq(entries.id, matchParticipants.entryId))
     .where(eq(matchParticipants.matchId, matchId));
-  return [...new Set(rows.map((row) => row.teamId))];
+  return rows.map((row) => ({ teamId: row.teamId, playerIds: row.playerIds ?? [] }));
 }
 
 // ---------------------------------------------------------------------------
@@ -121,11 +149,12 @@ export async function reportMatchResult(
     const game = await lockGame(tx, match.gameId);
     if (!game) return { ok: false as const, error: 'That game no longer exists.' };
 
-    const involved = await teamIdsInMatch(tx, match.id);
+    const involved = await entryFactsInMatch(tx, match.id);
     const authorization = authorizeSubmission({
       identity,
-      teamIdsInMatch: involved,
+      entriesInMatch: involved,
       captainTeamId: identity?.teamId ?? null,
+      wholeTeamGame: game.entriesPerTeam === 1,
     });
     if (!authorization.allowed) {
       return { ok: false as const, error: authorization.reason ?? 'Not allowed.' };
@@ -244,11 +273,12 @@ export async function undoMatch(
     const game = await lockGame(tx, match.gameId);
     if (!game) return { ok: false as const, error: 'That game no longer exists.' };
 
-    const involved = await teamIdsInMatch(tx, match.id);
+    const involved = await entryFactsInMatch(tx, match.id);
     const authorization = authorizeSubmission({
       identity,
-      teamIdsInMatch: involved,
+      entriesInMatch: involved,
       captainTeamId: identity?.teamId ?? null,
+      wholeTeamGame: game.entriesPerTeam === 1,
     });
     if (!authorization.allowed) {
       return { ok: false as const, error: authorization.reason ?? 'Not allowed.' };

@@ -1,7 +1,8 @@
 import { and, asc, eq, inArray, ne } from 'drizzle-orm';
 
 import { getDb } from '@/lib/db';
-import { entries, games, matchParticipants, matches, teams } from '@/lib/db/schema';
+import { entries, games, matchParticipants, matches, players, teams } from '@/lib/db/schema';
+import { shortEntryLabel } from '@/lib/entries';
 import type { MatchStatus, QueueMatch } from '@/lib/queue';
 
 /**
@@ -26,6 +27,7 @@ export async function loadQueueMatches(): Promise<QueueMatch[]> {
       slot: matches.slot,
       status: matches.status,
       queuePosition: matches.queuePosition,
+      entriesPerTeam: games.entriesPerTeam,
     })
     .from(matches)
     .innerJoin(games, eq(games.id, matches.gameId))
@@ -46,9 +48,11 @@ export async function loadQueueMatches(): Promise<QueueMatch[]> {
       slot: matchParticipants.slot,
       entryId: matchParticipants.entryId,
       label: entries.label,
+      playerIds: entries.playerIds,
       teamId: entries.teamId,
       teamName: teams.name,
       teamColor: teams.colorHex,
+      teamDraftPosition: teams.draftPosition,
     })
     .from(matchParticipants)
     .leftJoin(entries, eq(entries.id, matchParticipants.entryId))
@@ -56,16 +60,49 @@ export async function loadQueueMatches(): Promise<QueueMatch[]> {
     .where(inArray(matchParticipants.matchId, rows.map((row) => row.id)))
     .orderBy(asc(matchParticipants.slot));
 
+  /*
+   * Names for the assigned players, in one query rather than per entry. Only
+   * needed for the initials in the short label (SPEC.md §7.4).
+   */
+  const assignedIds = [...new Set(sides.flatMap((side) => side.playerIds ?? []))];
+  const nameById = new Map<string, string>();
+  if (assignedIds.length > 0) {
+    const named = await db
+      .select({ id: players.id, fullName: players.fullName })
+      .from(players)
+      .where(inArray(players.id, assignedIds));
+    for (const row of named) nameById.set(row.id, row.fullName);
+  }
+
+  const wholeTeamByMatch = new Map(rows.map((row) => [row.id, row.entriesPerTeam === 1]));
+
   const sidesByMatch = new Map<string, QueueMatch['sides']>();
   for (const side of sides) {
+    const playerIds = side.playerIds ?? [];
     sidesByMatch.set(side.matchId, [
       ...(sidesByMatch.get(side.matchId) ?? []),
       {
         entryId: side.entryId,
         label: side.label,
+        shortLabel:
+          side.entryId === null
+            ? null
+            : shortEntryLabel(
+                {
+                  label: side.label,
+                  teamName: side.teamName,
+                  teamDraftPosition: side.teamDraftPosition,
+                  // Drop ids with no name rather than rendering "?" for them.
+                  playerNames: playerIds
+                    .map((id) => nameById.get(id))
+                    .filter((name): name is string => name !== undefined),
+                },
+                wholeTeamByMatch.get(side.matchId) ?? false,
+              ),
         teamId: side.teamId,
         teamName: side.teamName,
         teamColor: side.teamColor,
+        playerIds,
       },
     ]);
   }
@@ -81,16 +118,8 @@ export async function loadQueueMatches(): Promise<QueueMatch[]> {
     slot: row.slot,
     status: row.status as MatchStatus,
     queuePosition: row.queuePosition,
+    wholeTeamGame: row.entriesPerTeam === 1,
     sides: sidesByMatch.get(row.id) ?? [],
   }));
 }
 
-/** The teams with an entry in a match, for the §8 authorization check. */
-export async function teamsInMatch(matchId: string): Promise<string[]> {
-  const rows = await getDb()
-    .select({ teamId: entries.teamId })
-    .from(matchParticipants)
-    .innerJoin(entries, eq(entries.id, matchParticipants.entryId))
-    .where(eq(matchParticipants.matchId, matchId));
-  return [...new Set(rows.map((row) => row.teamId))];
-}

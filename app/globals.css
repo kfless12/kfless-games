@@ -160,6 +160,13 @@ body {
     border: 3px solid var(--ink);
     border-radius: 0.625rem;
     background: var(--paper);
+    /*
+      Explicit, never inherited. A .btn inside .card-shout used to pick up that
+      panel's paper text colour: on .btn-quiet that was paper on paper and the
+      button vanished, and on .btn-primary it was paper on amber-bright at
+      2.2:1. Both are fixed by not inheriting. .btn-shout overrides below.
+    */
+    color: var(--ink);
     font-size: 1rem;
     font-weight: 800;
     text-transform: uppercase;

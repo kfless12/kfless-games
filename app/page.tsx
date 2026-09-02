@@ -12,6 +12,8 @@ import {
   buildStationQueues,
   findMyMatches,
   findYoureUp,
+  isViewersMatch,
+  type QueueViewer,
   type QueueMatch,
   type YoureUp,
 } from '@/lib/queue';
@@ -52,9 +54,15 @@ export default async function Dashboard() {
   ]);
 
   const queues = buildStationQueues(queueMatches);
-  const myTeamId = identity?.teamId ?? null;
-  const youreUp = findYoureUp(queues, myTeamId);
-  const myMatches = findMyMatches(queueMatches, myTeamId);
+  /*
+    Targeted at the person, not the team. SPEC.md §7.4: in beer pong a team
+    fields two pairs, so pinging the whole team for either pair is wrong three
+    times out of four. lib/queue.ts falls back to the whole team when the entry
+    has nobody assigned, or when the game is played by the whole team.
+  */
+  const viewer = identity ? { personId: identity.personId, teamId: identity.teamId } : null;
+  const youreUp = findYoureUp(queues, viewer);
+  const myMatches = findMyMatches(queueMatches, viewer);
 
   const leaderboard = buildLeaderboard({
     teams: scoring.teams,
@@ -130,7 +138,7 @@ export default async function Dashboard() {
             {myMatches.slice(0, 6).map((match) => (
               <li key={match.id} className="flex items-start justify-between gap-3">
                 <Link href={`/games/${match.gameId}`} className="min-w-0 font-bold underline">
-                  {match.sides.map((side) => side.label ?? 'TBC').join('  v  ')}
+                  {match.sides.map((side) => side.shortLabel ?? 'TBC').join('  v  ')}
                 </Link>
                 <span className="shrink-0 text-right text-xs font-bold uppercase tracking-wide text-muted">
                   {match.gameName}
@@ -163,9 +171,9 @@ export default async function Dashboard() {
               <li key={queue.station} className="card-quiet">
                 <p className="text-base font-black uppercase tracking-wide">{queue.station}</p>
                 <dl className="mt-2 flex flex-col gap-1 text-base">
-                  <QueueLine label="Now" match={queue.nowPlaying} myTeamId={myTeamId} />
-                  <QueueLine label="On deck" match={queue.onDeck} myTeamId={myTeamId} />
-                  <QueueLine label="In the hole" match={queue.inTheHole} myTeamId={myTeamId} />
+                  <QueueLine label="Now" match={queue.nowPlaying} viewer={viewer} />
+                  <QueueLine label="On deck" match={queue.onDeck} viewer={viewer} />
+                  <QueueLine label="In the hole" match={queue.inTheHole} viewer={viewer} />
                 </dl>
               </li>
             ))}
@@ -224,7 +232,7 @@ function YoureUpBanner({ hits }: { hits: YoureUp[] }) {
               {hit.slot === 'NOW_PLAYING' ? 'On now' : 'On deck'} &middot; {hit.station}
             </p>
             <p className="text-lg font-bold leading-tight">
-              {hit.match.sides.map((side) => side.label ?? 'TBC').join('  v  ')}
+              {hit.match.sides.map((side) => side.shortLabel ?? 'TBC').join('  v  ')}
             </p>
             <p className="text-sm opacity-80">{hit.match.gameName}</p>
           </li>
@@ -241,20 +249,20 @@ function YoureUpBanner({ hits }: { hits: YoureUp[] }) {
 function QueueLine({
   label,
   match,
-  myTeamId,
+  viewer,
 }: {
   label: string;
   match: QueueMatch | null;
-  myTeamId: string | null;
+  viewer: QueueViewer | null;
 }) {
-  const isMine =
-    match !== null && myTeamId !== null && match.sides.some((side) => side.teamId === myTeamId);
+  const isMine = match !== null && isViewersMatch(match, viewer);
 
   return (
     <div className="flex items-baseline justify-between gap-3">
       <dt className="shrink-0 text-sm font-bold uppercase tracking-wide text-muted">{label}</dt>
       <dd className={`text-right ${isMine ? 'font-black' : ''}`}>
-        {match ? match.sides.map((side) => side.label ?? 'TBC').join(' v ') : '—'}
+        {/* Short form, per SPEC.md §7.4 — the full labels do not fit here. */}
+        {match ? match.sides.map((side) => side.shortLabel ?? 'TBC').join(' v ') : '—'}
       </dd>
     </div>
   );

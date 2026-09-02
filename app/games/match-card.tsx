@@ -9,6 +9,8 @@ import { usePendingSubmit } from './use-pending-submit';
 export type MatchSide = {
   entryId: string | null;
   label: string | null;
+  /** The short preview form — see lib/entries.ts and SPEC.md §7.4. */
+  shortLabel: string | null;
   teamName: string | null;
   teamColor: string | null;
   score: number | null;
@@ -54,6 +56,14 @@ export function MatchCard({
     emptyResultState,
   );
   const [editing, setEditing] = useState(false);
+  /*
+   * Undo asks first. SPEC.md §8 makes undo recursive — undoing an early bracket
+   * match clears every later match that was decided by it — and the button sits
+   * next to "Change result" on a phone, held by someone who has been drinking.
+   * A mis-tap there silently deletes most of a tournament, so it takes two taps
+   * and the second one says what it will do.
+   */
+  const [confirmingUndo, setConfirmingUndo] = useState(false);
 
   const complete = match.status === 'COMPLETE';
   const playable = match.sides.every((side) => side.entryId !== null);
@@ -65,6 +75,10 @@ export function MatchCard({
    * mid-tournament it implies a match that is coming when it may never be.
    * Same treatment as the bracket view.
    */
+  // Only a bracket result cascades; a round robin or heat result stands alone.
+  const isBracketMatch =
+    match.bracket === 'WINNERS' || match.bracket === 'LOSERS' || match.bracket === 'GRAND_FINAL';
+
   const conditional =
     match.bracket === 'GRAND_FINAL' &&
     match.round === 2 &&
@@ -205,17 +219,44 @@ export function MatchCard({
         </form>
       )}
 
-      {canReport && complete && !editing && (
+      {canReport && complete && !editing && !confirmingUndo && (
         <div className="flex flex-wrap gap-2 border-t-2 border-rule pt-3">
           <button type="button" onClick={() => setEditing(true)} className="btn">
             Change result
           </button>
-          <form action={undoAction}>
-            <input type="hidden" name="matchId" value={match.id} />
-            <button type="submit" disabled={undoPending} className="btn">
-              {undoPending ? 'Undoing…' : 'Undo'}
+          <button type="button" onClick={() => setConfirmingUndo(true)} className="btn">
+            Undo
+          </button>
+        </div>
+      )}
+
+      {canReport && complete && !editing && confirmingUndo && (
+        <div
+          role="alertdialog"
+          aria-label="Confirm undo"
+          className="card-shout flex flex-col gap-2 border-t-2 border-rule p-3"
+        >
+          <p className="text-base font-bold">
+            Undo this result?
+            {isBracketMatch
+              ? ' Every later match decided by it gets cleared too.'
+              : ' The points for this game get recomputed.'}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <form action={undoAction} className="flex-1">
+              <input type="hidden" name="matchId" value={match.id} />
+              <button type="submit" disabled={undoPending} className="btn btn-shout w-full">
+                {undoPending ? 'Undoing…' : 'Yes, undo'}
+              </button>
+            </form>
+            <button
+              type="button"
+              onClick={() => setConfirmingUndo(false)}
+              className="btn btn-quiet"
+            >
+              Keep it
             </button>
-          </form>
+          </div>
         </div>
       )}
     </li>

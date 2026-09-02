@@ -8,8 +8,9 @@ import { FfaForm, type FfaEntry } from '@/app/games/ffa-form';
 import { MatchCard, type MatchCardData } from '@/app/games/match-card';
 import { identify, isAdmin } from '@/lib/auth';
 import { getDb } from '@/lib/db';
-import { entries, gameResults, games, matchParticipants, matches, teams } from '@/lib/db/schema';
-import { roundRobinStandings } from '@/lib/engine/submit';
+import { entries, gameResults, games, matchParticipants, matches, players, teams } from '@/lib/db/schema';
+import { shortEntryLabel } from '@/lib/entries';
+import { authorizeSubmission, roundRobinStandings } from '@/lib/engine/submit';
 import { FORMAT_LABELS, formatPointsMatrix, type GameFormat } from '@/lib/games';
 import { isUuid } from '@/lib/uuid';
 import { EmptyState, PageHeader, PlacementBadge, SectionHeading } from '@/app/ui';
@@ -46,9 +47,11 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
         id: entries.id,
         label: entries.label,
         seed: entries.seed,
+        playerIds: entries.playerIds,
         teamId: entries.teamId,
         teamName: teams.name,
         teamColor: teams.colorHex,
+        teamDraftPosition: teams.draftPosition,
       })
       .from(entries)
       .innerJoin(teams, eq(teams.id, entries.teamId))
@@ -65,6 +68,39 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
   ]);
 
   const entryById = new Map(gameEntries.map((entry) => [entry.id, entry]));
+
+  const wholeTeamGame = game.entriesPerTeam === 1;
+
+  /*
+   * Names for assigned players, for the short labels on the bracket (§7.4).
+   * One query for the whole game rather than one per entry.
+   */
+  const assignedIds = [...new Set(gameEntries.flatMap((entry) => entry.playerIds ?? []))];
+  const nameById = new Map<string, string>();
+  if (assignedIds.length > 0) {
+    const named = await db
+      .select({ id: players.id, fullName: players.fullName })
+      .from(players)
+      .where(inArray(players.id, assignedIds));
+    for (const row of named) nameById.set(row.id, row.fullName);
+  }
+
+  const shortLabelFor = (entryId: string | null): string | null => {
+    if (!entryId) return null;
+    const entry = entryById.get(entryId);
+    if (!entry) return null;
+    return shortEntryLabel(
+      {
+        label: entry.label,
+        teamName: entry.teamName,
+        teamDraftPosition: entry.teamDraftPosition,
+        playerNames: (entry.playerIds ?? [])
+          .map((playerId) => nameById.get(playerId))
+          .filter((name): name is string => name !== undefined),
+      },
+      wholeTeamGame,
+    );
+  };
 
   const participants =
     allMatches.length > 0
@@ -92,6 +128,7 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
       return {
         entryId: participant.entryId,
         label: entry?.label ?? null,
+        shortLabel: shortLabelFor(participant.entryId),
         teamName: entry?.teamName ?? null,
         teamColor: entry?.teamColor ?? null,
         score: participant.score,
@@ -101,17 +138,22 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
   }));
 
   /*
-   * SPEC.md §8: the admin, or a captain of either team in the match. Worked out
-   * per match, since a captain may report their own matches but not others'.
-   * lib/engine/submit.ts re-checks it server-side regardless.
+   * SPEC.md §8, decided by the same function the server uses rather than a
+   * second copy of the rule. When this drifted from the server the button and
+   * the action disagreed, which reads as the app being broken; and it now has
+   * an extra clause (assigned players) that would be easy to miss here.
+   * lib/engine/submit.ts re-checks it server-side regardless — invariant 6.
    */
-  const canReport = (match: MatchCardData) => {
-    if (admin) return true;
-    if (identity?.role !== 'CAPTAIN' || !identity.teamId) return false;
-    return match.sides.some(
-      (side) => side.entryId && entryById.get(side.entryId)?.teamId === identity.teamId,
-    );
-  };
+  const canReport = (match: MatchCardData) =>
+    authorizeSubmission({
+      identity,
+      entriesInMatch: match.sides
+        .map((side) => (side.entryId ? entryById.get(side.entryId) : undefined))
+        .filter((entry): entry is NonNullable<typeof entry> => entry !== undefined)
+        .map((entry) => ({ teamId: entry.teamId, playerIds: entry.playerIds ?? [] })),
+      captainTeamId: identity?.teamId ?? null,
+      wholeTeamGame,
+    }).allowed;
 
   const outstanding = allMatches.filter((match) => {
     if (match.status === 'COMPLETE') return false;
@@ -150,6 +192,16 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
           </Link>
         }
       />
+
+      {/*
+        SPEC.md §4.4 — captains fill in who takes each entry. Offered to anyone
+        who can act for a team; the console re-checks per team server-side.
+      */}
+      {(admin || identity?.role === 'CAPTAIN') && gameEntries.length > 0 && (
+        <Link href={`/games/${game.id}/lineup`} className="btn w-full">
+          Set lineups
+        </Link>
+      )}
 
       <div className="flex flex-wrap gap-2">
         <span className={`chip ${game.status === 'COMPLETE' ? 'chip-amber' : 'chip-quiet'}`}>

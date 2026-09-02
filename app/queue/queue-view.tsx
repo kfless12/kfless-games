@@ -180,7 +180,7 @@ function QueueRow({
               <span aria-hidden className="swatch" style={{ backgroundColor: side.teamColor }} />
             )}
             <span className={side.teamId === myTeamId ? 'font-black underline decoration-2' : ''}>
-              {side.label ?? <span className="text-muted">Waiting…</span>}
+              {side.shortLabel ?? <span className="text-muted">Waiting…</span>}
             </span>
           </li>
         ))}
@@ -228,7 +228,7 @@ function mine(match: QueueMatch, teamId: string | null): boolean {
 }
 
 function describeSides(match: QueueMatch): string {
-  return match.sides.map((side) => side.label ?? 'Waiting…').join(' v ');
+  return match.sides.map((side) => side.shortLabel ?? 'Waiting…').join(' v ');
 }
 
 function roundLabel(match: QueueMatch): string {

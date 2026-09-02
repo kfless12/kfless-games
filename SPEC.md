@@ -152,6 +152,18 @@ The unit that actually competes. **This table was missing from the previous spec
 - Entries are generated when the admin sets a game to `SCHEDULED`.
 - Captains may optionally assign which of their players fill each entry. Not required.
 
+Assignment happens in the lineup console at `/games/<id>/lineup` — a captain
+sees their own team, the admin sees all four. It stays **optional** and nothing
+downstream depends on it: §8 keeps captains able to report either way, and §7.4
+falls back to nudging the whole team. Rules the console does enforce, on the
+server: a player must be on the team that owns the entry, an entry holds at most
+`entry_size` players, and nobody may hold two entries in the same game — in beer
+pong that would mean playing themselves.
+
+This is not the bench/rotation logic §12 rejects. It records who is *in* an
+entry; nothing checks that they are the ones who actually played, and the 5th
+player still subs in freely.
+
 ### 4.5 `matches`
 
 `id`, `game_id`, `round` (int), `bracket` (`WINNERS` | `LOSERS` | `GRAND_FINAL` | `RR` | `HEAT`), `slot` (int, position within round), `status` (`PENDING` | `READY` | `IN_PROGRESS` | `COMPLETE`), `station` (text null), `queue_position` (int null), `completed_at`.
@@ -354,6 +366,13 @@ The reason the app exists. Beer pong alone will produce ~14 matches spread over 
 
 Admin retains a manual override to bump any match to the front of a station's queue.
 
+**Starting a match** is open to the admin or **any team captain**, not only a
+captain playing in it — whoever is standing at the table can get the next game
+going. It is not a privileged action in practice: only the on-deck match at a
+free station can be started at all, so this cannot reorder anyone's game.
+Players are deliberately excluded, since starting affects everyone queued behind.
+
+
 ### 7.2 Player dashboard
 
 The default landing page for anyone with a cookie.
@@ -371,9 +390,34 @@ The default landing page for anyone with a cookie.
 
 ---
 
+
+### 7.4 Who the queue is talking to
+
+The "you're up" banner is targeted at the **person**, not the team. In beer pong
+a team fields two pairs, so telling all four or five players to go to the table
+whenever either pair is called is wrong three times out of four, and a banner
+that is usually wrong is one people stop reading.
+
+A match is yours if you are assigned to an entry in it (§4.4). Two fallbacks
+widen that back out, both deliberate:
+
+- a **whole-team game** nudges the whole team, because everyone is playing;
+- an entry with **nobody assigned** nudges the whole team, because assignment is
+  optional and the alternative is telling nobody.
+
+**Short entry labels.** Previews and bracket cells show `T1 KF/JD` — team tag by
+draft position, plus the initials of the assigned players — falling back to
+`T1-A` when nobody is assigned, and to the plain team name in a whole-team game.
+A full label reads "Team One — A vs Team Two — B", which says little at a glance
+and does not fit a phone. The tag comes from `teams.draft_position`, never from
+the stored label: labels are snapshots from generation time and a captain can
+rename the team afterwards.
+
 ## 8. Scoring, editing, undo
 
-- **Who can submit:** admin, plus either captain involved in a match. Distributing this matters — one person entering every result for three days is a single point of failure, and that person wants to be drinking.
+- **Who can submit:** admin, plus either captain involved in a match, plus — in a game played by *part* of a team — any player assigned to an entry in that match (§4.4). Distributing this matters — one person entering every result for three days is a single point of failure, and that person wants to be drinking.
+- **A whole-team game (`entries_per_team = 1`) stays captain-only.** Every player is on one side or the other, so widening it to players would let anyone score it and leave nobody accountable for the number.
+- Because assignment is optional, captains keep their rights unconditionally. An entry with nobody assigned behaves exactly as it did before, and can never become a match nobody is able to score.
 - Every submission records the submitter in `audit_log`.
 - **Every completed match is editable.** Tap it, change the result, save.
 - **Undo:** clears the match result, recursively clears downstream bracket slots that were populated by it, resets those matches to `PENDING`, and removes the match from the queue's completed set.

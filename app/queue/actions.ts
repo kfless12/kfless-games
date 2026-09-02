@@ -7,9 +7,10 @@ import { recordAudit } from '@/lib/audit';
 import { identify, isAdmin } from '@/lib/auth';
 import { getDb } from '@/lib/db';
 import { matches } from '@/lib/db/schema';
-import { authorizeSubmission } from '@/lib/engine/submit';
-import { loadQueueMatches, teamsInMatch } from '@/lib/queue-db';
+
+import { loadQueueMatches } from '@/lib/queue-db';
 import {
+  authorizeQueueStart,
   bumpPositionFor,
   buildStationQueues,
   explainStartRefusal,
@@ -23,9 +24,12 @@ import type { QueueActionState } from './state';
  * Queue controls. SPEC.md §7.1.
  *
  * "Start" is what turns the first match at a station into NOW_PLAYING. §7.1
- * names the admin; a captain playing in the match may also start it, for the
- * same reason §8 lets them report the result — one person doing it for three
- * days is a single point of failure, and that person wants to be drinking.
+ * names the admin; any team captain may also start one, for the same reason §8
+ * distributes result entry — one person doing it for three days is a single
+ * point of failure, and that person wants to be drinking. It does not have to
+ * be a captain playing in the match: whoever is standing at the table can get
+ * the next game going, and the on-deck rule below means this cannot jump the
+ * queue regardless of who taps it.
  * Bumping the queue stays admin-only, since it reorders other people's games.
  */
 
@@ -45,14 +49,9 @@ async function startMatch(formData: FormData): Promise<QueueActionState> {
   const matchId = String(formData.get('matchId') ?? '');
   if (!isUuid(matchId)) return fail('Missing match.');
 
-  const involved = await teamsInMatch(matchId);
-  const authorization = authorizeSubmission({
-    identity,
-    teamIdsInMatch: involved,
-    captainTeamId: identity?.teamId ?? null,
-  });
+  const authorization = authorizeQueueStart(identity);
   if (!authorization.allowed) {
-    return fail(authorization.reason ?? 'Only the admin or a captain in this match can start it.');
+    return fail(authorization.reason ?? 'Only the admin or a team captain can start a match.');
   }
 
   const db = getDb();
@@ -94,12 +93,7 @@ async function unstartMatch(formData: FormData): Promise<QueueActionState> {
   const matchId = String(formData.get('matchId') ?? '');
   if (!isUuid(matchId)) return fail('Missing match.');
 
-  const involved = await teamsInMatch(matchId);
-  const authorization = authorizeSubmission({
-    identity,
-    teamIdsInMatch: involved,
-    captainTeamId: identity?.teamId ?? null,
-  });
+  const authorization = authorizeQueueStart(identity);
   if (!authorization.allowed) return fail(authorization.reason ?? 'Not allowed.');
 
   const db = getDb();

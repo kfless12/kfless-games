@@ -45,8 +45,8 @@ export default async function GamesPage() {
         eyebrow="Every event"
         title="Games"
         action={
-          <Link href="/standings" className="btn btn-quiet">
-            Standings
+          <Link href="/" className="btn btn-quiet">
+            Home
           </Link>
         }
       />

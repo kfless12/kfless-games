@@ -15,9 +15,13 @@ export type MatchStatus = 'PENDING' | 'READY' | 'IN_PROGRESS' | 'COMPLETE';
 export type QueueSide = {
   entryId: string | null;
   label: string | null;
+  /** The short preview form — see lib/entries.ts and SPEC.md §7.4. */
+  shortLabel: string | null;
   teamId: string | null;
   teamName: string | null;
   teamColor: string | null;
+  /** Players the captain assigned to this entry. Empty when unassigned (§4.4). */
+  playerIds: string[];
 };
 
 export type QueueMatch = {
@@ -33,6 +37,8 @@ export type QueueMatch = {
   status: MatchStatus;
   /** The manual override. Lower sorts earlier; null means "no override". */
   queuePosition: number | null;
+  /** True when one entry is the whole team — games.entries_per_team === 1. */
+  wholeTeamGame: boolean;
   sides: QueueSide[];
 };
 
@@ -131,10 +137,53 @@ export type YoureUp = {
   station: string;
 };
 
-function teamsIn(match: QueueMatch): string[] {
-  return match.sides
-    .map((side) => side.teamId)
-    .filter((teamId): teamId is string => teamId !== null);
+/** Who the queue is talking to. */
+export type QueueViewer = { personId: string; teamId: string | null };
+
+/**
+ * Whether this match is the viewer's to show up for. SPEC.md §7.4.
+ *
+ * Not "is my team in it" any more. In beer pong a team fields two pairs, so
+ * telling all four or five players "you're up" every time either pair is called
+ * is three false alarms out of four, and a banner that is usually wrong is a
+ * banner people stop reading.
+ *
+ * Two deliberate widenings back out:
+ *
+ * - A whole-team game pings the whole team, because everyone really is playing.
+ * - An entry with nobody assigned pings the whole team, because assignment is
+ *   optional (§4.4) and the alternative is telling nobody at all.
+ */
+export function isViewersMatch(match: QueueMatch, viewer: QueueViewer | null): boolean {
+  if (!viewer) return false;
+
+  for (const side of match.sides) {
+    if (side.playerIds.includes(viewer.personId)) return true;
+
+    if (side.teamId !== null && side.teamId === viewer.teamId) {
+      if (match.wholeTeamGame || side.playerIds.length === 0) return true;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * SPEC.md §7.1: starting a match is open to the admin or any team captain.
+ *
+ * Widened from "a captain playing in this match" — a captain standing at the
+ * table can get the next game going without hunting for whoever is in it, and
+ * the queue already refuses to start anything but the on-deck match at a free
+ * station, so this cannot reorder anyone's game. Players are deliberately not
+ * included: starting affects the station everyone else is queued behind.
+ */
+export function authorizeQueueStart(actor: { role: string } | null): {
+  allowed: boolean;
+  reason?: string;
+} {
+  if (!actor) return { allowed: false, reason: 'Sign in first.' };
+  if (actor.role === 'ADMIN' || actor.role === 'CAPTAIN') return { allowed: true };
+  return { allowed: false, reason: 'Only the admin or a team captain can start a match.' };
 }
 
 /**
@@ -145,8 +194,8 @@ function teamsIn(match: QueueMatch): string[] {
  * In the hole is deliberately excluded — the banner is for "go now", and firing
  * it three matches out would train people to ignore it.
  */
-export function findYoureUp(queues: StationQueue[], teamId: string | null): YoureUp[] {
-  if (!teamId) return [];
+export function findYoureUp(queues: StationQueue[], viewer: QueueViewer | null): YoureUp[] {
+  if (!viewer) return [];
 
   const hits: YoureUp[] = [];
 
@@ -155,7 +204,7 @@ export function findYoureUp(queues: StationQueue[], teamId: string | null): Your
       ['NOW_PLAYING', queue.nowPlaying],
       ['ON_DECK', queue.onDeck],
     ] as const) {
-      if (match && teamsIn(match).includes(teamId)) {
+      if (match && isViewersMatch(match, viewer)) {
         hits.push({ match, slot, station: queue.station });
       }
     }
@@ -170,10 +219,13 @@ export function findYoureUp(queues: StationQueue[], teamId: string | null): Your
  * Only queueable matches: a PENDING bracket match has empty slots, so nobody
  * knows yet whether this team is in it.
  */
-export function findMyMatches(matches: QueueMatch[], teamId: string | null): QueueMatch[] {
-  if (!teamId) return [];
+export function findMyMatches(
+  matches: QueueMatch[],
+  viewer: QueueViewer | null,
+): QueueMatch[] {
+  if (!viewer) return [];
   return matches
-    .filter((match) => isQueueable(match) && teamsIn(match).includes(teamId))
+    .filter((match) => isQueueable(match) && isViewersMatch(match, viewer))
     .sort(compareQueueOrder);
 }
 

@@ -46,8 +46,8 @@ export default async function StandingsPage() {
         eyebrow="Who is winning"
         title="Standings"
         action={
-          <Link href="/games" className="btn btn-quiet">
-            Games
+          <Link href="/" className="btn btn-quiet">
+            Home
           </Link>
         }
       />

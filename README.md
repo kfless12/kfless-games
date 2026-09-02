@@ -93,6 +93,7 @@ app/                 routes (App Router)
   draft/             draft board, picks, admin controls, 5s polling
   games/             the games list, per-game match list, result entry
   games/bracket-view.tsx  the bracket, horizontally scrolled (§11)
+  games/[id]/lineup/  captains assign players to entries (§4.4)
   standings/         the leaderboard, every team a link to its profile
   teams/[id]/        team profile: identity, position, roster (§9.4)
   players/[id]/      a player's draft card, read-only and public (§9.4)
@@ -104,6 +105,7 @@ app/                 routes (App Router)
   api/health/        liveness + DB readiness endpoint
   api/images/[id]/   serves images out of Postgres
 lib/
+  entries.ts         short entry labels for previews (pure, tested)
   auth.ts            THE auth module — identify() and nothing else
   session.ts         cookie format + role resolution (pure, tested)
   rate-limit.ts      backoff arithmetic (pure, tested)
@@ -275,6 +277,60 @@ admin who is *also* a captain never equals `'CAPTAIN'` and silently lost the
 team form — the exact trap CLAUDE.md invariant 5 exists to prevent. The helper
 is the only thing that knows ADMIN sits above CAPTAIN.
 
+## Lineups, and who the queue talks to
+
+SPEC.md §4.4 lets captains say which of their players take each entry, in the
+lineup console at `/games/<id>/lineup`. A captain sees their own team; the admin
+sees all four, because on the day the admin will end up doing it for whoever
+hasn't.
+
+It stays **optional**, and that is load-bearing — nothing downstream requires it:
+
+- §8 keeps captains able to report a result either way, so an unassigned entry
+  can never become a match nobody can score.
+- §7.4 nudges the whole team when an entry has nobody assigned.
+
+The console does enforce, server-side: a player must be on the team owning the
+entry, an entry holds at most `entry_size` players, and nobody may hold two
+entries in the same game — in beer pong that would mean playing themselves.
+
+This is not the bench/rotation logic SPEC.md §12 rejects. It records who is *in*
+an entry; nothing checks they are who actually played, and the 5th player still
+subs in freely.
+
+### The banner talks to a person, not a team
+
+A team fields two beer pong pairs, so telling everyone "you're up" whenever
+either pair is called is wrong three times out of four — and a banner that is
+usually wrong is one people stop reading. `isViewersMatch()` in `lib/queue.ts`
+matches on the assigned players, widening back to the whole team for a
+whole-team game or an unassigned entry.
+
+### Short entry labels
+
+Previews and bracket cells read `T1 KF/JD` — team tag plus assigned players'
+initials — falling back to `T1-A` when nobody is assigned, and to the plain team
+name in a whole-team game. `lib/entries.ts`, pure and tested.
+
+The tag comes from `teams.draft_position`, never from the stored entry label:
+labels are snapshots taken at generation time, and a captain renaming the team
+afterwards would leave the old name inside them.
+
+### Who can report, and who can start
+
+`authorizeSubmission()` grants the admin, either captain in the match, and — in
+a game played by part of a team — any player assigned to an entry in it. A
+whole-team game stays captain-only: everyone is on one side or the other, so
+widening it would let anyone score it and leave nobody accountable.
+
+Starting a match is now open to the admin or **any** team captain, not only one
+playing in it. It is not privileged in practice — only the on-deck match at a
+free station can be started at all, so it cannot reorder anyone's game.
+
+The game page decides whether to show the report form by calling
+`authorizeSubmission()` itself rather than keeping a second copy of the rule.
+The two had already drifted once, which reads as the app being broken.
+
 ## The queue and dashboard
 
 The queue derives itself (SPEC.md §7.1) — nothing is stored except the one
@@ -318,6 +374,11 @@ SPEC.md §12 rejects those, partly because Safari has never implemented
 Background Sync.
 
 ## Scoring, editing and undo
+
+Undo takes two taps. It is recursive — undoing an early bracket match clears
+every later match decided by it — and the button sits next to "Change result" on
+a phone held by someone who has been drinking. The confirm says which of those
+two things is about to happen, since a round-robin result cascades to nothing.
 
 Results are reported by the admin or by either captain playing in the match
 (SPEC.md §8), checked server-side per match. Every completed match is editable

@@ -19,16 +19,12 @@ import type { MatchCardData } from './match-card';
 type Column = { round: number; label: string; matches: MatchCardData[] };
 
 /*
- * Entry labels read "Team Three — B", which does not fit a bracket column at
- * 390px and truncates to "Team Three …" — dropping the half that distinguishes
- * one entry from the other. The colour swatch beside it already says "team", so
- * the word is redundant here. Full labels stay on the placings list and the
- * match cards below.
+ * Bracket cells use the short entry form (SPEC.md §7.4) — "T1 KF/JD", or
+ * "T1-A" before a captain assigns anyone. A full label reads "Team Three — B",
+ * which does not fit a column at 390px and truncates to "Team Three …",
+ * dropping the half that tells the two entries apart. Full labels stay on the
+ * placings list and the match cards below.
  */
-function compactLabel(label: string): string {
-  const stripped = label.replace(/^Team\s+/, '');
-  return stripped.length > 0 ? stripped : label;
-}
 
 const BRACKET_TITLES: Record<string, string> = {
   WINNERS: 'Winners bracket',
@@ -145,7 +141,7 @@ function BracketCell({ match }: { match: MatchCardData }) {
                 }`}
                 title={side.label ?? undefined}
               >
-                {side.label === null ? '—' : compactLabel(side.label)}
+                {side.shortLabel ?? side.label ?? '—'}
               </span>
               {side.score !== null && (
                 <span className="shrink-0 font-bold tabular-nums">{side.score}</span>
