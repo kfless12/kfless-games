@@ -711,7 +711,23 @@ No R2 bucket, and no incremental cache configured. That is deliberate: §12
 rejects R2, and every route here is `force-dynamic` because standings, the
 queue and the draft are derived at read time, so there is nothing to cache.
 
-### 16.3 The one real code change
+### 16.3 Hostnames
+
+`https://kflessgames.kevin-flessa.com` is the custom domain and the URL to hand
+out. The default `https://kfless-games.kfless12.workers.dev` is still live and
+serves the same app against the same database.
+
+The session cookie is host-only, deliberately — a `domain` attribute scoped to
+`.kevin-flessa.com` would share it with every other subdomain of a personal
+domain. So a session on one hostname is not a session on the other, and join
+links must be copied from whichever hostname people are meant to use: `/admin`
+builds them from the request's own `Host` header.
+
+The domain lives in the Cloudflare dashboard rather than `wrangler.jsonc`, so
+`wrangler deploy` does not touch it, and the revert checklist in §16.4 means
+retiring the domain too.
+
+### 16.4 The one real code change
 
 Workers gives every request its own I/O context, and a socket opened for one
 request may not be used by the next — a module-level pool that survives between
@@ -725,14 +741,14 @@ Connection reuse therefore has to happen on the Postgres side, which is why
 the two row locks this app takes (`app/draft/actions.ts`,
 `lib/engine/submit.ts`) are both inside a transaction, so they stay on one
 server connection for their whole life. This was verified, not assumed — see
-16.5.
+16.6.
 
 Hyperdrive is deliberately **not** used. It would remove the need for a pooling
 endpoint, but its query cache is on by default with a 60-second TTL, and this
 app polls every 5–10 seconds and derives everything at read time, so a 60-second
 read cache would show stale standings and a stale queue.
 
-### 16.4 Revert checklist
+### 16.5 Revert checklist
 
 Delete, in any order:
 
@@ -750,7 +766,7 @@ Nothing on the container path reads any of it. `output: 'standalone'` is
 untouched, `npm run build`, `npm start`, the `Dockerfile` and `docker-compose`
 all behave exactly as before, and `npm test` does not know this section exists.
 
-### 16.5 What was verified
+### 16.6 What was verified
 
 Built and run locally in `workerd` against the compose Postgres:
 

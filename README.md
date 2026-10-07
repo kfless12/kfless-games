@@ -532,6 +532,32 @@ Three pieces, only one of them Cloudflare's:
 3. **Migrations and seeding run from your laptop** against that database. No
    change to anything in `scripts/`.
 
+### Hostnames
+
+- `https://kflessgames.kevin-flessa.com` — the custom domain, and the one to
+  hand out.
+- `https://kfless-games.kfless12.workers.dev` — the default Workers hostname.
+  Still live, still serving the same app and the same database.
+
+Two things follow from there being two of them, both because the session cookie
+is **host-only** (no `domain` attribute, which is the right default — scoping it
+to `.kevin-flessa.com` would hand it to every other subdomain of a personal
+domain):
+
+- **A session does not carry across.** Redeeming a link on `workers.dev` signs
+  you in there and nowhere else. Anyone who signed in before the custom domain
+  existed has to redeem again on it.
+- **Copy join links from the hostname you want people to use.** `/admin` builds
+  them from the request's own `Host`, so links copied while browsing
+  `workers.dev` point at `workers.dev`. Verified: the same page served with
+  `X-Forwarded-Host: kflessgames.kevin-flessa.com` emits
+  `https://kflessgames.kevin-flessa.com/join/<token>`.
+
+The custom domain is configured in the Cloudflare dashboard, not in
+`wrangler.jsonc`. `wrangler deploy` leaves it alone. To retire the `workers.dev`
+hostname and leave one canonical URL, set `"workers_dev": false` in
+`wrangler.jsonc` and redeploy.
+
 ### Prerequisites
 
 - Node **22+** locally. Wrangler refuses to run on Node 20.
