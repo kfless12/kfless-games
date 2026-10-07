@@ -2,6 +2,7 @@ import { timingSafeEqual } from 'node:crypto';
 
 import { and, desc, eq, gte, isNull, sql } from 'drizzle-orm';
 import { cookies, headers } from 'next/headers';
+import { redirect } from 'next/navigation';
 
 import { joinPathFor, newJoinCode, newToken } from '@/lib/credentials';
 import { getDb } from '@/lib/db';
@@ -90,8 +91,9 @@ export async function clearSession() {
  * in both server components and route handlers, where no Request object is in
  * hand. Pass one explicitly from middleware or a test if you have it.
  *
- * Returns null for PUBLIC (no cookie). PUBLIC gets read-only access to
- * everything except the admin console and the draft-pick action — SPEC.md §3.4.
+ * Returns null for an unidentified visitor. Almost nothing should render for
+ * one — SPEC.md §3.4 — so pages call requireIdentity() below instead, and use
+ * this directly only where null is a real, handled case (the join screen).
  */
 export async function identify(request?: Request): Promise<Identity | null> {
   const raw = request
@@ -121,6 +123,28 @@ export async function identify(request?: Request): Promise<Identity | null> {
     teamId: player.teamId,
     role: resolveRole(player.isAdmin || session.elevated, player.isCaptain),
   };
+}
+
+/**
+ * Identity, or the join screen. SPEC.md §3.4: the roster, photos, scouting
+ * cards, brackets and standings are all off limits without a credential, so
+ * every page but /join starts here.
+ *
+ * This is the real check, not a convenience: it re-derives the identity from
+ * the signed cookie on every request. Nothing upstream is trusted to have done
+ * it — a middleware that only sniffs for a cookie would be satisfied by
+ * `kfless_session=anything`, which is no boundary at all.
+ *
+ * redirect() throws, so the return type is honest: callers get a non-null
+ * Identity and do not need to narrow it.
+ *
+ * Route handlers must NOT use this — a redirect is the wrong answer to a fetch.
+ * They call identify() and return a 404 themselves; see app/api/images.
+ */
+export async function requireIdentity(): Promise<Identity> {
+  const identity = await identify();
+  if (!identity) redirect('/join');
+  return identity;
 }
 
 // ---------------------------------------------------------------------------

@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
 import { ProfileForm, type ProfileFormValues } from '@/app/me/profile-form';
-import { identify, isAdmin } from '@/lib/auth';
+import { isAdmin, requireIdentity } from '@/lib/auth';
 import { getDb } from '@/lib/db';
 import { players } from '@/lib/db/schema';
 import { RATING_FIELDS, TEXT_FIELDS } from '@/lib/profile';
@@ -18,7 +18,7 @@ export default async function AdminPlayerPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const identity = await identify();
+  const identity = await requireIdentity();
   if (!isAdmin(identity)) notFound();
 
   const { id } = await params;

@@ -1,6 +1,6 @@
 import Link from 'next/link';
 
-import { identify, isAdmin } from '@/lib/auth';
+import { isAdmin, requireIdentity } from '@/lib/auth';
 import { loadDraftState } from '@/lib/draft-state';
 
 import { AdminControls } from './admin-controls';
@@ -11,9 +11,10 @@ import { DraftPoller } from './poller';
 
 export const dynamic = 'force-dynamic';
 
-/** SPEC.md §5.3. Public and read-only for anyone without a cookie (§3.4). */
+/** SPEC.md §5.3. Credential required, like every page but /join (§3.4). */
 export default async function DraftPage() {
-  const [identity, draft] = await Promise.all([identify(), loadDraftState()]);
+  const identity = await requireIdentity();
+  const draft = await loadDraftState();
 
   const admin = isAdmin(identity);
   const onTheClock = draft.onTheClock;

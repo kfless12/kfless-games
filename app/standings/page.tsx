@@ -1,5 +1,6 @@
 import Link from 'next/link';
 
+import { requireIdentity } from '@/lib/auth';
 import { getDb } from '@/lib/db';
 import { standingsOverrides } from '@/lib/db/schema';
 import { loadHeadToHead, loadScoringData } from '@/lib/engine/submit';
@@ -11,12 +12,14 @@ export const dynamic = 'force-dynamic';
 /**
  * Standings. Its own nav slot per SPEC.md §11 — split from the games list,
  * because "who is winning" and "what is being played" are different questions
- * and stacking both under one tab buried the games. Public and read-only for
- * anyone without a cookie (§3.4).
+ * and stacking both under one tab buried the games. Credential required
+ * (§3.4) — the table carries team and player names.
  *
  * Every team is a link through to its profile and roster.
  */
 export default async function StandingsPage() {
+  await requireIdentity();
+
   const db = getDb();
 
   const [scoring, headToHead, overrides] = await Promise.all([

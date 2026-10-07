@@ -6,7 +6,7 @@ import { BracketView } from '@/app/games/bracket-view';
 import { CompleteControls } from '@/app/games/complete-controls';
 import { FfaForm, type FfaEntry } from '@/app/games/ffa-form';
 import { MatchCard, type MatchCardData } from '@/app/games/match-card';
-import { identify, isAdmin } from '@/lib/auth';
+import { isAdmin, requireIdentity } from '@/lib/auth';
 import { getDb } from '@/lib/db';
 import { entries, gameResults, games, matchParticipants, matches, players, teams } from '@/lib/db/schema';
 import { shortEntryLabel } from '@/lib/entries';
@@ -33,7 +33,7 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
   const [game] = await db.select().from(games).where(eq(games.id, id)).limit(1);
   if (!game) notFound();
 
-  const identity = await identify();
+  const identity = await requireIdentity();
   const admin = isAdmin(identity);
 
   const [allMatches, gameEntries, results] = await Promise.all([

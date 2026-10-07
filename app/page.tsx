@@ -3,7 +3,7 @@ import Link from 'next/link';
 
 import { signOut } from '@/app/join/actions';
 import { Poller } from '@/app/poller';
-import { identify, isAdmin } from '@/lib/auth';
+import { isAdmin, requireIdentity } from '@/lib/auth';
 import { getDb } from '@/lib/db';
 import { checkDatabase } from '@/lib/db/health';
 import { players, standingsOverrides, teams } from '@/lib/db/schema';
@@ -28,11 +28,11 @@ export const dynamic = 'force-dynamic';
  * a cookie: the "you're up" banner, their next matches, the live queue, and a
  * standings snapshot.
  *
- * Public without a cookie — SPEC.md §3.4 gives PUBLIC read-only access to
- * everything but the admin console and the draft-pick action.
+ * Credential required, like every page but /join — SPEC.md §3.4.
  */
 export default async function Dashboard() {
-  const [identity, database] = await Promise.all([identify(), checkDatabase()]);
+  const identity = await requireIdentity();
+  const database = await checkDatabase();
 
   if (!database.ok) {
     return (
@@ -91,7 +91,7 @@ export default async function Dashboard() {
       {/* SPEC.md §7.2: large and unmissable, with the station name. */}
       {youreUp.length > 0 && <YoureUpBanner hits={youreUp} />}
 
-      {identity && me ? (
+      {me ? (
         <section className="card-quiet flex flex-wrap items-center justify-between gap-3">
           <span className="flex min-w-0 items-center gap-3">
             {me.photoUrl ? (
@@ -118,14 +118,18 @@ export default async function Dashboard() {
           </form>
         </section>
       ) : (
+        /*
+          identify() already confirmed this player exists, so getting here means
+          the row vanished between that check and this query. Offer the way out
+          rather than a blank card.
+        */
         <section className="card">
-          <p className="text-base">
-            Everything here is public. Your own card, the draft, and reporting a result need
-            your link.
-          </p>
-          <Link href="/join" className="btn btn-primary mt-3 w-full">
-            Sign in
-          </Link>
+          <p className="text-base">We couldn&apos;t load your card. Try signing in again.</p>
+          <form action={signOut} className="mt-3">
+            <button type="submit" className="btn btn-primary w-full">
+              Sign out
+            </button>
+          </form>
         </section>
       )}
 

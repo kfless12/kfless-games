@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
 import { EmptyState, PageHeader, SectionHeading, TeamMark } from '@/app/ui';
-import { canActForTeam, identify, isAdmin } from '@/lib/auth';
+import { canActForTeam, isAdmin, requireIdentity } from '@/lib/auth';
 import { getDb } from '@/lib/db';
 import { entries, games, players, teams } from '@/lib/db/schema';
 import { shortEntryLabel } from '@/lib/entries';
@@ -28,7 +28,7 @@ export default async function LineupPage({ params }: { params: Promise<{ id: str
   const [game] = await db.select().from(games).where(eq(games.id, id)).limit(1);
   if (!game) notFound();
 
-  const identity = await identify();
+  const identity = await requireIdentity();
   const admin = isAdmin(identity);
 
   const [gameEntries, teamRows] = await Promise.all([

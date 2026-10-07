@@ -8,7 +8,8 @@ import { TeamMark } from './ui';
  * The read-only draft card. SPEC.md §5.3 wants the pool to show "photo, name,
  * nickname, and scouting ratings"; this is the same card at full size, reachable
  * for any player at any point in the weekend rather than only while they are
- * undrafted. Public per SPEC.md §3.4.
+ * undrafted. Visible to any signed-in guest; a credential is required to reach
+ * any page that renders it (SPEC.md §3.4).
  *
  * Ratings render as bars because they are self-reported and decorative
  * (CLAUDE.md invariant 7) — a bar reads as bragging, a precise number reads as

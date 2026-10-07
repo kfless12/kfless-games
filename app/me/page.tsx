@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 import { PlayerCard } from '@/app/player-card';
-import { canActForTeam, identify } from '@/lib/auth';
+import { canActForTeam, requireIdentity } from '@/lib/auth';
 import { getDb } from '@/lib/db';
 import { players, teams } from '@/lib/db/schema';
 import { RATING_FIELDS, TEXT_FIELDS } from '@/lib/profile';
@@ -29,8 +29,7 @@ export default async function MePage({
 }: {
   searchParams: Promise<{ edit?: string }>;
 }) {
-  const identity = await identify();
-  if (!identity) redirect('/join');
+  const identity = await requireIdentity();
 
   const editing = (await searchParams).edit === '1';
 

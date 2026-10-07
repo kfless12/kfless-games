@@ -2,7 +2,7 @@ import { asc, eq } from 'drizzle-orm';
 import { headers } from 'next/headers';
 import Link from 'next/link';
 
-import { identify, isAdmin, listCredentials } from '@/lib/auth';
+import { isAdmin, listCredentials, requireIdentity } from '@/lib/auth';
 import { getDb } from '@/lib/db';
 import { players, teams } from '@/lib/db/schema';
 
@@ -23,7 +23,7 @@ async function currentOrigin() {
 }
 
 export default async function AdminPage() {
-  const identity = await identify();
+  const identity = await requireIdentity();
 
   // Server-side gate. SPEC.md §3.4: the admin console is the one thing PUBLIC
   // does not get to read.
