@@ -2,7 +2,7 @@ import { asc, sql } from 'drizzle-orm';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
-import { identify, isAdmin } from '@/lib/auth';
+import { isAdmin, requireIdentity } from '@/lib/auth';
 import { getDb } from '@/lib/db';
 import { entries, games, matches } from '@/lib/db/schema';
 import { formatPointsMatrix, type GameFormat } from '@/lib/games';
@@ -16,7 +16,7 @@ export const dynamic = 'force-dynamic';
 
 /** SPEC.md §4.3: games are admin-managed and can be added at any time. */
 export default async function AdminGamesPage() {
-  const identity = await identify();
+  const identity = await requireIdentity();
   if (!isAdmin(identity)) notFound();
 
   const db = getDb();

@@ -81,7 +81,40 @@ Given that all 17 emails are already in hand, this is the better option and the 
 
 - Rate limit credential submission: 5 attempts per IP, then exponential backoff. This matters more than credential length.
 - Never place a token, PIN, or code in a URL query string — only in a path segment (magic link) or a POST body. Query strings end up in logs, browser history, and screenshots.
-- Roles: `ADMIN`, `CAPTAIN`, `PLAYER`. Anyone with no cookie is `PUBLIC` and gets read-only access to everything except the admin console and the draft-pick action.
+- Roles: `ADMIN`, `CAPTAIN`, `PLAYER`. **Anyone with no cookie sees the join screen and nothing else.**
+
+  Reversed. This previously read "anyone with no cookie is `PUBLIC` and gets
+  read-only access to everything except the admin console and the draft-pick
+  action", which was wrong for what the app actually holds: 17 real people's
+  photographs, full names, home towns, colleges, and a scouting report each
+  wrote about themselves. The app is reachable at a guessable URL on the public
+  internet, and none of those people agreed to publish any of it. There is no
+  benefit on the other side of the trade — the audience is exactly the 17
+  guests, and every one of them has a link.
+
+  `PUBLIC` is therefore no longer a role with read access; it is the state of
+  not being signed in, and its only route is `/join`. Concretely:
+
+  - Every page but `/join` requires a credential and redirects there without
+    one. That includes the standings and the brackets, which carry team and
+    player names.
+  - `/api/images/<id>` requires one too, and answers `404` without — the ids are
+    visible in page source, so an open image route would undo the gate on every
+    page that shows a face. Its responses are `private` and `Vary: Cookie`, so
+    the CDN in front of the app cannot hold a copy and serve it onward.
+  - `/api/health` and `/api/pulse` stay open: the first is a liveness probe a
+    host calls before any cookie exists and reports counts rather than names,
+    the second returns the string `ok` and touches no database.
+  - `/join/<token>` stays open by definition — it is how someone stops being
+    anonymous.
+
+  The gate is per-page rather than middleware, for two reasons: the cookie is
+  signed with `node:crypto`, which the edge runtime does not provide, and a
+  middleware that merely checks a cookie is *present* is satisfied by
+  `kfless_session=anything`. The real check runs where the data is read. Because
+  a per-page gate can be forgotten, `lib/route-guard.test.ts` walks the route
+  tree and fails on any page or handler that is neither gated nor on an
+  explicit, reasoned public list.
 
 ---
 
@@ -474,8 +507,9 @@ CDN, which at 17 users with immutable caching does not matter.
 
 ### 9.4 Reading other people's cards
 
-Profiles are for looking at, not only for filling in. Two read-only views, both
-public per §3.4:
+Profiles are for looking at, not only for filling in. Two read-only views. Both
+require a credential, like everything else (§3.4) — "read-only" here means they
+do not let you edit someone else's card, not that a stranger may read them:
 
 - **`/players/<id>`** — a player's draft card: photo, bio, self-reported
   ratings, scouting report, team, pick number, and the Mister Irrelevant label

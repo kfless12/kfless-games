@@ -32,6 +32,14 @@ const ITEMS = [
 export function BottomNav() {
   const pathname = usePathname();
 
+  /*
+   * Not on the join screen. Since SPEC.md §3.4 was reversed, every one of these
+   * five destinations bounces an unidentified visitor straight back here, so
+   * showing them is an invitation to a loop. The join screen is the one page
+   * with nothing else to navigate to.
+   */
+  if (pathname === '/join') return null;
+
   return (
     <nav
       aria-label="Main"

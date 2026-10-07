@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation';
 
 import { PlayerCard } from '@/app/player-card';
 import { PageHeader } from '@/app/ui';
-import { identify, isAdmin } from '@/lib/auth';
+import { isAdmin, requireIdentity } from '@/lib/auth';
 import { getDb } from '@/lib/db';
 import { players, teams } from '@/lib/db/schema';
 import { isUuid } from '@/lib/uuid';
@@ -12,9 +12,11 @@ import { isUuid } from '@/lib/uuid';
 export const dynamic = 'force-dynamic';
 
 /**
- * A player's draft card, read-only. Public per SPEC.md §3.4 — anyone can look
- * at anyone, which is the point of scouting cards. The draft board links here
- * so profiles stay reachable after the pool empties (SPEC.md §5.3).
+ * A player's draft card, read-only. Any signed-in guest may look at any other
+ * guest — that is the point of scouting cards — but a credential is required
+ * (SPEC.md §3.4): this page is someone's photograph, home town and college. The
+ * draft board links here so profiles stay reachable after the pool empties
+ * (SPEC.md §5.3).
  */
 export default async function PlayerPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -22,8 +24,9 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
   if (!isUuid(id)) notFound();
 
   const db = getDb();
-  const [identity, rows] = await Promise.all([
-    identify(),
+  const identity = await requireIdentity();
+
+  const [rows] = await Promise.all([
     db
       .select({ player: players, team: teams })
       .from(players)

@@ -1,7 +1,7 @@
 import Link from 'next/link';
 
 import { Poller } from '@/app/poller';
-import { identify, isAdmin } from '@/lib/auth';
+import { isAdmin, requireIdentity } from '@/lib/auth';
 import { authorizeQueueStart, buildStationQueues, startableMatchIds } from '@/lib/queue';
 import { loadQueueMatches } from '@/lib/queue-db';
 
@@ -14,10 +14,12 @@ export const dynamic = 'force-dynamic';
 /**
  * The full queue, every station. SPEC.md §7.1 and §11's nav.
  *
- * Public and read-only without a cookie (§3.4) — anyone can see what is on.
+ * Credential required (§3.4). Read-only for a plain player: the start and
+ * bump controls are gated separately below.
  */
 export default async function QueuePage() {
-  const [identity, matches] = await Promise.all([identify(), loadQueueMatches()]);
+  const identity = await requireIdentity();
+  const matches = await loadQueueMatches();
   const queues = buildStationQueues(matches);
   const admin = isAdmin(identity);
 

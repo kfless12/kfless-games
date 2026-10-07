@@ -238,10 +238,38 @@ Per-person magic links with a 6-digit day-of fallback (SPEC.md §3.2).
 - `/join/<token>` sets a signed, httpOnly cookie for 90 days and redirects.
 - `/join` takes the 6-digit code for anyone who can't find their email.
 - Roles: `ADMIN` (from `players.is_admin`), `CAPTAIN` (`players.is_captain`),
-  `PLAYER`. No cookie means `PUBLIC` — read-only, no admin console.
+  `PLAYER`. **No cookie means you see `/join` and nothing else** (SPEC.md §3.4).
 - `ADMIN_CREDENTIAL` is break-glass only: it elevates an **already identified**
   person, so admin actions always have a real actor in `audit_log`.
 - Credential submission is rate limited per IP in Postgres, not in memory.
+
+### Nothing is readable without a credential
+
+This was reversed partway through. The app used to be publicly readable, which
+was wrong for what it holds: 17 real people's photographs, full names, home
+towns, colleges and self-written scouting reports, on a guessable URL on the
+public internet. Nobody agreed to publish that, and there was nothing on the
+other side of the trade — the audience is the 17 guests and all of them have a
+link.
+
+- Every page but `/join` calls `requireIdentity()` and redirects there without a
+  credential.
+- `/api/images/<id>` checks too and answers **404** without one. The ids are in
+  the page source, so an open image route would undo the gate on every page
+  showing a face. Responses are `private` + `Vary: Cookie` so the CDN cannot
+  hold a copy and serve it onward.
+- `/api/health` and `/api/pulse` stay open — a liveness probe runs before any
+  cookie exists, and pulse returns the string `ok` and touches no database.
+
+The gate is **per-page, not middleware**, deliberately. `lib/session.ts` signs
+with `node:crypto`, which the edge runtime does not provide; and a middleware
+that only checks a cookie is *present* is satisfied by `kfless_session=anything`,
+so the real check has to run where the data is read.
+
+The weakness of a per-page gate is forgetting a page, so
+`lib/route-guard.test.ts` walks the route tree and fails on anything neither
+gated nor on an explicit, reasoned public list. Adding a page without a gate
+breaks `npm test` immediately.
 
 ## Navigation and profiles
 
@@ -252,8 +280,9 @@ buried under the table. "Who is winning" and "what is being played" are
 different questions and now get a tab each. Five still clears the 44px tap
 target at 390px, at 78px each.
 
-Everything is tappable through to a profile (SPEC.md §9.4), all of it public per
-§3.4:
+Everything is tappable through to a profile (SPEC.md §9.4). All of it needs a
+credential (§3.4) — "read-only" below means you cannot edit someone else's card,
+not that a stranger may read it:
 
 - **Standings** → tap a team → its profile: logo, motto, position, points per
   game, and the roster → tap a player → their draft card.
@@ -567,10 +596,13 @@ and run `npm run cf:preview`.
 
 ### What friends can see without signing in
 
-SPEC.md §3.4 makes the app publicly readable with no cookie, so the bare URL is
-enough to browse standings, brackets, the draft board and rosters. A magic link
-is only needed to *do* anything — pick, start a match, or report a score. Send
-the URL, not a link, unless you want someone acting as a specific player.
+Nothing. SPEC.md §3.4 was reversed: the bare URL now lands on the join screen,
+and the roster, standings, brackets and photos are all behind a credential.
+
+So **sending the URL alone shows a stranger nothing**, which is the point — but
+it also means a demo needs a real credential. Give someone their own magic link
+from `/admin`, or their 6-digit code. Be deliberate about it: a link signs that
+person in *as* that player, with their captain or admin powers.
 
 ### Why the pooling endpoint is mandatory
 

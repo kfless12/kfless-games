@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
 import { EmptyState, PageHeader, PlacementBadge, SectionHeading, TeamMark } from '@/app/ui';
-import { canActForTeam, identify } from '@/lib/auth';
+import { canActForTeam, requireIdentity } from '@/lib/auth';
 import { getDb } from '@/lib/db';
 import { players, standingsOverrides, teams } from '@/lib/db/schema';
 import { loadHeadToHead, loadScoringData } from '@/lib/engine/submit';
@@ -13,8 +13,8 @@ import { isUuid } from '@/lib/uuid';
 export const dynamic = 'force-dynamic';
 
 /**
- * A team's profile: identity, where it sits, and the roster. Public per
- * SPEC.md §3.4.
+ * A team's profile: identity, where it sits, and the roster. Credential
+ * required (SPEC.md §3.4) — the roster is a list of real names.
  *
  * The points come from buildLeaderboard rather than a query of their own, so
  * this page and /standings can never disagree — same derivation, same
@@ -25,8 +25,9 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
   if (!isUuid(id)) notFound();
 
   const db = getDb();
-  const [identity, teamRows, roster, scoring, headToHead, overrides] = await Promise.all([
-    identify(),
+  const identity = await requireIdentity();
+
+  const [teamRows, roster, scoring, headToHead, overrides] = await Promise.all([
     db.select().from(teams).where(eq(teams.id, id)).limit(1),
     db
       .select()

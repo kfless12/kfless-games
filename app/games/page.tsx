@@ -1,7 +1,7 @@
 import { asc, sql } from 'drizzle-orm';
 import Link from 'next/link';
 
-import { identify } from '@/lib/auth';
+import { requireIdentity } from '@/lib/auth';
 import { getDb } from '@/lib/db';
 import { games, matches } from '@/lib/db/schema';
 import { FORMAT_LABELS, type GameFormat } from '@/lib/games';
@@ -11,14 +11,14 @@ export const dynamic = 'force-dynamic';
 
 /**
  * Every game, each one a link to its bracket or table. Its own nav slot per
- * SPEC.md §11; standings moved to /standings. Public and read-only for anyone
- * without a cookie (§3.4).
+ * SPEC.md §11; standings moved to /standings. Credential required (§3.4).
  */
 export default async function GamesPage() {
   const db = getDb();
 
-  const [identity, gameRows, matchCounts] = await Promise.all([
-    identify(),
+  const identity = await requireIdentity();
+
+  const [gameRows, matchCounts] = await Promise.all([
     db.select().from(games).orderBy(asc(games.sortOrder), asc(games.name)),
     db
       .select({
