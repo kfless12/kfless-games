@@ -20,6 +20,7 @@
     "test:unit": "tsx --test $(find lib scripts -name '*.test.ts' -not -name 'schema.test.ts' | sort)",
     "db:demo": "SEED_RESET=1 SEED_FAKE_PROFILES=1 tsx scripts/seed.ts",
     "db:dry-run": "tsx scripts/dry-run.ts",
+    "db:backup": "sh scripts/backup.sh",
     "cf:build": "opennextjs-cloudflare build",
     "cf:preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "cf:deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy"

@@ -64,7 +64,7 @@ docker compose up --build
 | `npm run build` | Production build (standalone output) |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run lint` | ESLint |
-| `npm test` | All tests (needs the compose Postgres up) |
+| `npm test` | All tests (needs the compose Postgres up, migrated **and seeded** — the database tests mutate seeded rows inside a rolled-back transaction) |
 | `npm run test:unit` | Pure-logic tests only, no database |
 | `npm run test:watch` | Tests in watch mode |
 | `npm run db:up` / `db:down` | Start / stop the compose Postgres |
@@ -74,10 +74,42 @@ docker compose up --build
 | `npm run db:reset` | Wipe and reseed (`SEED_RESET=1`) |
 | `npm run db:demo` | Wipe, reseed, **and** fill placeholder avatars/bios/ratings |
 | `npm run db:dry-run` | A completed draft **plus** a played-out 3-day event, for looking at the UI |
+| `npm run db:backup` | `pg_dump` the whole event database into `backups/` (see [Backups](#backups)) |
 | `npm run db:studio` | Drizzle Studio |
 | `npm run cf:build` | Build the Cloudflare Worker (temporary, SPEC.md §16) |
 | `npm run cf:preview` | Build and run the Worker locally in `workerd` |
 | `npm run cf:deploy` | Build and deploy the Worker (needs Node 22+) |
+
+## Backups
+
+There is no second chance at the event, so the database gets dumped to a file
+on a schedule a person can keep: **once before each day starts and once after
+it ends**, from the admin's laptop, against the real `DATABASE_URL`.
+
+```bash
+npm run db:backup
+```
+
+That writes `backups/kfless-games-<utc-timestamp>.dump`, a compressed
+`pg_dump` custom-format file. All state lives in Postgres (SPEC.md §10.2) —
+results, the draft, the audit log and every photo — so that one file is the
+whole event. It is gitignored; copy it somewhere that is not the laptop.
+
+To restore, point `DATABASE_URL` at an **empty** database (drop and recreate,
+or a fresh one) and run:
+
+```bash
+pg_restore --no-owner --no-privileges -d "$DATABASE_URL" backups/<file>.dump
+```
+
+Then redeploy or restart the app; nothing is cached in the process, so it
+reads the restored state on the next request. Join links survive a restore —
+credentials are rows like everything else.
+
+The script uses a local `pg_dump` if it is at least version 17 (the server's
+version; an older one refuses to connect), and otherwise runs `pg_dump` from
+the `postgres:17-alpine` image through Docker, which the dev setup already
+needs.
 
 ## Layout
 
