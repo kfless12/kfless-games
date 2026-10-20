@@ -5,11 +5,13 @@ online snake draft, and a tournament engine with a live "up next" queue.
 
 `SPEC.md` is the source of truth. `CLAUDE.md` holds the working rules.
 
-**Status: Phase 7 (polish) complete.** Build order is SPEC.md §14.
+**Status: built and deployed.** Build order is SPEC.md §14; every phase is
+done.
 
-A throwaway Cloudflare Workers demo also exists (SPEC.md §16) so the app can be
-shared before the real host is picked. It is built to be deleted — see
-[Temporary: the Cloudflare demo](#temporary-the-cloudflare-demo).
+It runs on **Cloudflare Workers** at `https://kflessgames.kevin-flessa.com`
+with a managed Postgres (SPEC.md §16) — see
+[Hosting: Cloudflare Workers](#hosting-cloudflare-workers). The `Dockerfile`
+is the full local run and the fallback host.
 
 ## Stack
 
@@ -76,7 +78,7 @@ docker compose up --build
 | `npm run db:dry-run` | A completed draft **plus** a played-out 3-day event, for looking at the UI |
 | `npm run db:backup` | `pg_dump` the whole event database into `backups/` (see [Backups](#backups)) |
 | `npm run db:studio` | Drizzle Studio |
-| `npm run cf:build` | Build the Cloudflare Worker (temporary, SPEC.md §16) |
+| `npm run cf:build` | Build the Cloudflare Worker (SPEC.md §16) |
 | `npm run cf:preview` | Build and run the Worker locally in `workerd` |
 | `npm run cf:deploy` | Build and deploy the Worker (needs Node 22+) |
 
@@ -89,6 +91,11 @@ it ends**, from the admin's laptop, against the real `DATABASE_URL`.
 ```bash
 npm run db:backup
 ```
+
+Use the database's **direct** connection string, not the pooling one the
+Worker uses: `pg_dump` needs a session-level connection, and a transaction-mode
+pooler (Neon's `-pooler` host, PgBouncer) will refuse it or fail partway. The
+script removes a failed dump rather than leaving a file that looks like one.
 
 That writes `backups/kfless-games-<utc-timestamp>.dump`, a compressed
 `pg_dump` custom-format file. All state lives in Postgres (SPEC.md §10.2) —
@@ -550,12 +557,12 @@ there. `experimental.serverActions.bodySizeLimit` is raised to 6mb in
 `next.config.js` because the 1MB default would reject a legitimate upload as a
 413 before any of that runs.
 
-## Temporary: the Cloudflare demo
+## Hosting: Cloudflare Workers
 
-**This is disposable.** SPEC.md §16 is the spec, including the revert checklist.
-It does not resolve SPEC.md §15.4, and it is not a candidate for running the
-event — the `Dockerfile` already runs anywhere, and Cloudflare is the one host
-that needs application changes to work at all.
+The host, per SPEC.md §15.4; §16 is the spec, including the rules application
+code has to respect (§16.3). It started as a demo and was promoted because it
+held up. The `Dockerfile` remains the full local run and the fallback, so code
+has to keep working on both.
 
 Three pieces, only one of them Cloudflare's:
 
@@ -564,31 +571,22 @@ Three pieces, only one of them Cloudflare's:
 3. **Migrations and seeding run from your laptop** against that database. No
    change to anything in `scripts/`.
 
-### Hostnames
+### Hostname
 
-- `https://kflessgames.kevin-flessa.com` — the custom domain, and the one to
-  hand out.
-- `https://kfless-games.kfless12.workers.dev` — the default Workers hostname.
-  Still live, still serving the same app and the same database.
+`https://kflessgames.kevin-flessa.com`, and only that. The default
+`*.workers.dev` hostname is disabled (`"workers_dev": false` in
+`wrangler.jsonc`), because the session cookie is **host-only** — no `domain`
+attribute, which is the right default, since scoping it to `.kevin-flessa.com`
+would hand it to every other subdomain of a personal domain — and a second
+hostname meant a second place to redeem a link and be signed in nowhere useful.
 
-Two things follow from there being two of them, both because the session cookie
-is **host-only** (no `domain` attribute, which is the right default — scoping it
-to `.kevin-flessa.com` would hand it to every other subdomain of a personal
-domain):
-
-- **A session does not carry across.** Redeeming a link on `workers.dev` signs
-  you in there and nowhere else. Anyone who signed in before the custom domain
-  existed has to redeem again on it.
-- **Copy join links from the hostname you want people to use.** `/admin` builds
-  them from the request's own `Host`, so links copied while browsing
-  `workers.dev` point at `workers.dev`. Verified: the same page served with
-  `X-Forwarded-Host: kflessgames.kevin-flessa.com` emits
-  `https://kflessgames.kevin-flessa.com/join/<token>`.
+`/admin` builds join links from the request's own `Host`, so copy them while
+browsing the real hostname. Verified: the page served with
+`X-Forwarded-Host: kflessgames.kevin-flessa.com` emits
+`https://kflessgames.kevin-flessa.com/join/<token>`.
 
 The custom domain is configured in the Cloudflare dashboard, not in
-`wrangler.jsonc`. `wrangler deploy` leaves it alone. To retire the `workers.dev`
-hostname and leave one canonical URL, set `"workers_dev": false` in
-`wrangler.jsonc` and redeploy.
+`wrangler.jsonc`. `wrangler deploy` leaves it alone.
 
 ### Prerequisites
 
@@ -622,8 +620,9 @@ DATABASE_URL='<direct, non-pooling url>' npm run db:dry-run
 npm run cf:deploy
 ```
 
-Use the **direct** (non-pooling) URL for migrations and seeding, and the
-**pooling** URL for the Worker secret.
+Use the **direct** (non-pooling) URL for migrations, seeding and backups, and
+the **pooling** URL for the Worker secret. A deploy that adds no migration is
+just `npm run cf:deploy`.
 
 ### Getting in as admin once it is deployed
 
@@ -684,9 +683,18 @@ it, and with every route `force-dynamic` there is nothing to cache.
 
 ### Costs and limits
 
-The Worker bundles to **1.54 MB gzipped**, inside the 3 MB Workers Free limit,
-so this fits the free plan. The Postgres provider is the part likely to have a
-free-tier expiry — check before relying on the link staying up.
+The Worker bundles to **1.54 MB gzipped**, inside the 3 MB Workers Free limit.
+Check it again after adding a dependency; `npm run cf:build` prints it.
+
+Workers also meters **CPU time per request**, and the budget depends on the
+plan — small on Free (on the order of 10 ms), generous on the paid plan. I/O
+waits do not count; rendering does. Observability is on in `wrangler.jsonc`, so
+the Cloudflare dashboard shows CPU time per request: confirm the plan and look
+at the numbers for the dashboard and queue pages with the dry-run data loaded,
+before 17 phones start polling every 10 seconds.
+
+The Postgres provider is the part likely to have a free-tier expiry — check
+before the event.
 
 ## Docker image targets
 

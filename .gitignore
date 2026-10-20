@@ -46,7 +46,7 @@ next-env.d.ts
 # database dumps from scripts/backup.sh
 /backups/
 
-# Cloudflare Workers demo — TEMPORARY, SPEC.md §16
+# Cloudflare Workers build output — SPEC.md §16
 .open-next/
 .wrangler/
 .dev.vars

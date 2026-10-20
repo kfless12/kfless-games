@@ -4,12 +4,14 @@
 # Postgres — results, the draft, the audit trail and every photo — so one
 # pg_dump is a complete backup and one pg_restore is a complete recovery.
 #
-# Run it from a laptop against whichever DATABASE_URL is the real one, the
-# same way migrations and seeds run (SPEC.md §16.2). It writes to ./backups,
+# Run it from a laptop against the real database, the same way migrations and
+# seeds run (SPEC.md §16.1). Use the DIRECT connection string, not the pooling
+# one the Worker uses: pg_dump needs a session-level connection and a
+# transaction-mode pooler refuses it or fails partway. It writes to ./backups,
 # which is gitignored. Takes seconds; the whole database is a few megabytes.
 #
-#   npm run db:backup                 # uses DATABASE_URL from .env
-#   DATABASE_URL=postgres://... npm run db:backup
+#   npm run db:backup                           # uses DATABASE_URL from .env
+#   DATABASE_URL='<direct url>' npm run db:backup
 #
 # Restore into an EMPTY database (drop and recreate it first, or use a fresh
 # one and point DATABASE_URL at it):

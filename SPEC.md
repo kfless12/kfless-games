@@ -544,6 +544,12 @@ Ship a `Dockerfile` and a `docker-compose.yml`.
 
 This keeps DO App Platform, a DO Droplet, Fly, Render, Railway, and Cloud Run all available. **Note that Vercel ignores the Dockerfile** — it builds from source with its own pipeline. That path stays open too, but only as long as the constraints below hold.
 
+The event runs on **Cloudflare Workers** (§15.4, §16), which does not use the
+Dockerfile. The container path is kept anyway: it is the full local run
+(`docker compose up --build`), and it is the fallback if Workers misbehaves on
+the day. Application code therefore has to work on both, which is what §16.3
+spells out.
+
 ### 10.2 Stateless constraints — do not violate
 
 These are what keep every host viable:
@@ -560,9 +566,10 @@ These are what keep every host viable:
 That is the whole list. There is deliberately no object storage configuration —
 see §9.3.
 
-One temporary exception: the Cloudflare demo in §16 adds `WORKERS_RUNTIME`,
-which selects the per-request database pool that Workers requires. It is not
-read by anything on the permanent container path and goes away with §16.
+Plus one non-secret switch: `WORKERS_RUNTIME=1`, set by `wrangler.jsonc` on
+the Workers host and nowhere else. It selects the per-request database pool
+that Workers requires (§16.3). In the container it is unset and the module-level
+pool is used. It does not belong in `.env`.
 
 ---
 
@@ -647,11 +654,11 @@ get tests, and UI does not.
 
 **Phase 7 — Polish.** Styling, logos, bracket layout on mobile, empty states, a dry run with fake results across all three days.
 
-**Phase 8 — Temporary demo deployment (Cloudflare Workers).** Not part of the
-event build. A throwaway host so the app can be shared and poked at before the
-real host is chosen. Everything it adds is listed in §16 with a revert
-checklist, because it is the one thing in this project built to be deleted.
-This phase does **not** resolve §15.4.
+**Phase 8 — Deployment (Cloudflare Workers).** The host, per §15.4, described
+in §16. Built first as a demo so the app could be shared before the event; it
+held up, and it stayed. Verifiable: the custom domain serves the app against
+the managed Postgres, a magic link signs in, and an admin undo commits through
+the pooling endpoint (§16.5).
 
 ---
 
@@ -671,104 +678,108 @@ This phase does **not** resolve §15.4.
    the go, per §4.3. Only beer pong is fixed (`DOUBLE_ELIM`, 2 entries per
    team, spans all 3 days). Each game's `points_matrix` is set when the game is
    created, so no game list needs to exist in advance.
-4. **Host** — DO App Platform vs. DO Droplet. **Still open.** Neither option
-   affects application code; both run the `runner` image from the `Dockerfile`
-   as-is.
+4. ~~**Host**~~ — RESOLVED: **Cloudflare Workers** with a managed Postgres,
+   at `https://kflessgames.kevin-flessa.com`. §16 is the spec for it.
 
-   A Cloudflare Workers deployment exists as a temporary demo host (§16) and
-   does **not** resolve this. Cloudflare is the one host considered that *does*
-   affect application code — it cannot run the container, and Workers' request
-   isolation forbids reusing a database connection pool across requests — which
-   is exactly why §16 is scoped as disposable rather than folded into the
-   permanent stack. Choosing the real host means deleting §16, not building on
-   it.
+   It was built as a throwaway demo while DO App Platform and a DO Droplet were
+   the candidates, and it held up, so it stayed. It is the one host that
+   affects application code — Workers cannot run the container, and its
+   request isolation forbids reusing a database pool across requests — so the
+   constraints that follow are rules in §16.3 rather than a revert checklist.
+   The `Dockerfile` is kept as the full local run and as the fallback host
+   (§10.1); nothing in application code assumes either host beyond §16.3.
 
 ---
 
-## 16. Temporary: the Cloudflare Workers demo
+## 16. Hosting: Cloudflare Workers
 
-**Status: temporary. Delete this whole section and everything it lists when
-§15.4 is decided.**
+Resolves §15.4. Began life as a demo host; promoted because it worked. The
+`Dockerfile` and `docker-compose.yml` are unchanged and remain the local run
+and the fallback (§10.1).
 
-### 16.1 Why it exists
-
-To put a working link in front of friends before the event, with the seeded
-demo data, while §15.4 is still open. It is a demo host, not a candidate for
-the real one: there is no reason to run the event off it when the `Dockerfile`
-already runs anywhere.
-
-### 16.2 What it is
+### 16.1 What it is
 
 Three pieces, only one of which is Cloudflare's:
 
-- **Cloudflare Workers** runs the app, built by `@opennextjs/cloudflare`.
-- **A Postgres somewhere else** — Workers has no database. Any provider works;
-  `DATABASE_URL` must point at a **pooling** endpoint (see 16.3).
-- Migrations and seeding run from a laptop against that database directly, not
-  from the Worker. Nothing about `scripts/` changes.
+- **Cloudflare Workers** runs the app, built by `@opennextjs/cloudflare`
+  (`npm run cf:deploy`). Configuration is `wrangler.jsonc` and
+  `open-next.config.ts`.
+- **A managed Postgres elsewhere** — Workers has no database. `DATABASE_URL`
+  must point at a **pooling** endpoint (16.3).
+- **Migrations, seeding and backups run from a laptop** against that database
+  directly, using its **direct** (non-pooling) URL. Nothing about `scripts/`
+  changes. `pg_dump` in particular needs a session-level connection, which a
+  transaction-mode pooler does not give it.
 
 No R2 bucket, and no incremental cache configured. That is deliberate: §12
 rejects R2, and every route here is `force-dynamic` because standings, the
 queue and the draft are derived at read time, so there is nothing to cache.
 
-### 16.3 Hostnames
+### 16.2 Hostname
 
-`https://kflessgames.kevin-flessa.com` is the custom domain and the URL to hand
-out. The default `https://kfless-games.kfless12.workers.dev` is still live and
-serves the same app against the same database.
+`https://kflessgames.kevin-flessa.com` is the URL, and the only one. The
+default `*.workers.dev` hostname is disabled (`"workers_dev": false` in
+`wrangler.jsonc`) so that nobody redeems a magic link on a second host.
 
 The session cookie is host-only, deliberately — a `domain` attribute scoped to
 `.kevin-flessa.com` would share it with every other subdomain of a personal
-domain. So a session on one hostname is not a session on the other, and join
-links must be copied from whichever hostname people are meant to use: `/admin`
-builds them from the request's own `Host` header.
+domain. `/admin` builds join links from the request's own `Host` header, so
+links must be copied while browsing the real hostname.
 
 The domain lives in the Cloudflare dashboard rather than `wrangler.jsonc`, so
-`wrangler deploy` does not touch it, and the revert checklist in §16.4 means
-retiring the domain too.
+`wrangler deploy` does not touch it.
 
-### 16.4 The one real code change
+### 16.3 Constraints application code must respect
 
-Workers gives every request its own I/O context, and a socket opened for one
-request may not be used by the next — a module-level pool that survives between
-requests fails with "Cannot perform I/O on behalf of a different request". So
-`lib/db/index.ts` gains a branch, behind `WORKERS_RUNTIME=1`, that builds a
-fresh single-connection pool per `getDb()` and lets `pg` open the socket lazily
-on the first query.
+These are the rules that follow from the host. They are not optional, and a
+change that breaks one is a bug even if `npm test` is green.
 
-Connection reuse therefore has to happen on the Postgres side, which is why
-`DATABASE_URL` must be a pooling endpoint. Transaction-mode pooling is fine:
-the two row locks this app takes (`app/draft/actions.ts`,
-`lib/engine/submit.ts`) are both inside a transaction, so they stay on one
-server connection for their whole life. This was verified, not assumed — see
-16.6.
+1. **One database pool per request on Workers.** Workers gives every request
+   its own I/O context, and a socket opened for one request may not be used by
+   the next — a module-level pool that survives between requests fails with
+   "Cannot perform I/O on behalf of a different request". `lib/db/index.ts`
+   therefore builds a fresh single-connection pool per `getDb()` when
+   `WORKERS_RUNTIME=1`, and lets `pg` open the socket lazily on the first
+   query. The container keeps the module-level pool. Both branches stay.
+2. **`DATABASE_URL` on the Worker is a pooling endpoint.** Connection reuse has
+   to happen on the Postgres side, because of rule 1. Transaction-mode pooling
+   is fine *as long as every row lock is taken inside a transaction*, so it
+   stays on one server connection for its whole life. The two that exist
+   (`app/draft/actions.ts`, `lib/engine/submit.ts`) are. **Any new
+   `select … for update` must be inside a transaction too.**
+3. **No Hyperdrive.** It would remove the need for a pooling endpoint, but its
+   query cache is on by default with a 60-second TTL, and this app polls every
+   5–10 seconds and derives everything at read time, so a 60-second read cache
+   would show stale standings and a stale queue.
+4. **Bundle size.** The Worker bundle was 1.54 MB gzipped against a 3 MB limit
+   on the Free plan. Check it after adding any dependency; `npm run cf:build`
+   prints it.
+5. **CPU time.** Workers meters CPU time per request, and the budget depends on
+   the plan — the Free plan's is small (on the order of 10 ms), the paid plan's
+   is not. I/O waits do not count; rendering does. Observability is enabled in
+   `wrangler.jsonc`, so the dashboard shows CPU time per request. Confirm the
+   plan and the numbers on the dashboard and queue pages before the event,
+   with the dry-run data loaded.
+6. **The container path keeps working.** It is the fallback. Nothing may be
+   added that only runs on Workers, and `output: 'standalone'` stays set.
+7. **Node 22** to build and deploy; Wrangler refuses Node 20. Local `next dev`
+   still runs on 20, which is how a Node-22-only API can pass typecheck and
+   crash at runtime. Prefer 22 everywhere.
 
-Hyperdrive is deliberately **not** used. It would remove the need for a pooling
-endpoint, but its query cache is on by default with a 60-second TTL, and this
-app polls every 5–10 seconds and derives everything at read time, so a 60-second
-read cache would show stale standings and a stale queue.
+### 16.4 Deploy and operate
 
-### 16.5 Revert checklist
+- Secrets are pushed once with `wrangler secret put`: `DATABASE_URL` (the
+  **pooling** URL), `SESSION_SECRET`, `ADMIN_CREDENTIAL`. They are write-only.
+- Migrate and seed from a laptop with the **direct** URL, then
+  `npm run cf:deploy`. A deploy with no new migration needs nothing else.
+- Back up with `npm run db:backup` and the **direct** URL — before and after
+  each day of the event. The README has the restore procedure.
+- `.dev.vars.example` → `.dev.vars` and `npm run cf:preview` runs the real
+  Worker locally in `workerd` against whatever `DATABASE_URL` it names.
 
-Delete, in any order:
+### 16.5 What was verified
 
-- `wrangler.jsonc`, `open-next.config.ts`, `.dev.vars.example`
-- the `WORKERS_RUNTIME` branch in `lib/db/index.ts` (`onWorkers`, `workersDb`,
-  and the branch in `getDb`)
-- `outputFileTracingIncludes` in `next.config.js`
-- the `cf:build` / `cf:preview` / `cf:deploy` scripts and the
-  `@opennextjs/cloudflare` and `wrangler` devDependencies in `package.json`
-- the `.open-next/`, `.wrangler/`, `.dev.vars` entries in `.gitignore`
-- the `WORKERS_RUNTIME` paragraph in §10.3, Phase 8 in §14, the §16 reference
-  in §15.4, the README section, and this section
-
-Nothing on the container path reads any of it. `output: 'standalone'` is
-untouched, `npm run build`, `npm start`, the `Dockerfile` and `docker-compose`
-all behave exactly as before, and `npm test` does not know this section exists.
-
-### 16.6 What was verified
-
-Built and run locally in `workerd` against the compose Postgres:
+Built and run locally in `workerd` against the compose Postgres, then deployed:
 
 - Worker bundle 1.54 MB gzipped, inside the 3 MB Workers Free limit.
 - `pg` reached Postgres over TCP from `workerd`: `/api/health` returned
@@ -778,6 +789,5 @@ Built and run locally in `workerd` against the compose Postgres:
   committed through an interactive transaction holding a `select … for update`:
   `game_results` 8 → 0, complete matches 14 → 13, game `COMPLETE` → `ACTIVE`,
   with a `result.undo` row in `audit_log` attributed to the right actor.
-
-The Worker was never deployed to Cloudflare — that needs an account, and the
-account holder should run it.
+- The custom domain serves the app against the managed database, and `/admin`
+  emits join links on that hostname.

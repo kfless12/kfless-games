@@ -1,6 +1,6 @@
 import { checkDatabase } from '@/lib/db/health';
 
-// Liveness + readiness endpoint for whichever host is chosen (SPEC.md §15.4).
+// Liveness + readiness endpoint for the host (SPEC.md §16) and the container fallback.
 export const dynamic = 'force-dynamic';
 
 export async function GET() {

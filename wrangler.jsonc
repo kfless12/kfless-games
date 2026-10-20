@@ -1,7 +1,8 @@
 /**
- * TEMPORARY — SPEC.md §16. The Cloudflare Workers demo host, so the app can be
- * poked at by friends before the real host is chosen. SPEC.md §15.4 is still
- * open; delete this file along with the rest of that phase.
+ * The Cloudflare Workers host — SPEC.md §16. Resolves §15.4.
+ *
+ * The custom domain (kflessgames.kevin-flessa.com) is attached in the
+ * Cloudflare dashboard, not here; `wrangler deploy` leaves it alone.
  */
 {
   "$schema": "node_modules/wrangler/config-schema.json",
@@ -11,6 +12,10 @@
   // nodejs_compat is what lets `pg` open a TCP socket to Postgres at all.
   "compatibility_date": "2025-09-01",
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+
+  // One hostname only. The session cookie is host-only, so a second hostname
+  // is a second place to redeem a magic link and be signed in nowhere useful.
+  "workers_dev": false,
 
   "assets": {
     "directory": ".open-next/assets",
@@ -23,7 +28,7 @@
     }
   ],
 
-  // Switches lib/db/index.ts to a per-request pool. See the comment there.
+  // Switches lib/db/index.ts to a per-request pool — SPEC.md §16.3 rule 1.
   "vars": {
     "WORKERS_RUNTIME": "1"
   },

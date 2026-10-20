@@ -1,5 +1,6 @@
-# TEMPORARY — SPEC.md §16. Local `npm run cf:preview` reads .dev.vars (gitignored).
-# Copy to .dev.vars. Use throwaway values; do not reuse the ones from .env.
+# SPEC.md §16.4. Local `npm run cf:preview` runs the real Worker in workerd and
+# reads .dev.vars (gitignored). Copy this to .dev.vars. Use throwaway values; do
+# not reuse the ones from .env.
 NEXTJS_ENV=development
 DATABASE_URL=postgresql://user:password@host/db?sslmode=require
 SESSION_SECRET=

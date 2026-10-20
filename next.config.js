@@ -17,8 +17,7 @@ const nextConfig = {
   turbopack: { root: __dirname },
   outputFileTracingRoot: __dirname,
 
-  // TEMPORARY — SPEC.md §16, the Cloudflare Workers demo. Remove with that
-  // phase.
+  // For the Cloudflare Workers host — SPEC.md §16.
   //
   // `pg` reaches Postgres from a Worker through pg-cloudflare, whose real
   // implementation sits behind the `workerd` export condition. Next's file
