@@ -168,7 +168,12 @@ export async function markGameComplete(
     action: 'game.complete',
     targetType: 'game',
     targetId: gameId,
-    after: { placements: outcome.resultCount, coinFlipUsed: coinFlip.length > 0 },
+    after: {
+      placements: outcome.resultCount,
+      coinFlipUsed: coinFlip.length > 0,
+      // The order the admin recorded, so a disputed flip can be looked up later.
+      coinFlipOrder: coinFlip.length > 0 ? coinFlip : undefined,
+    },
   });
 
   revalidate(gameId);

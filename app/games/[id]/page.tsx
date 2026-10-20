@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
 import { BracketView } from '@/app/games/bracket-view';
-import { CompleteControls } from '@/app/games/complete-controls';
+import { CompleteControls, type TiedEntry } from '@/app/games/complete-controls';
 import { FfaForm, type FfaEntry } from '@/app/games/ffa-form';
 import { MatchCard, type MatchCardData } from '@/app/games/match-card';
 import { isAdmin, requireIdentity } from '@/lib/auth';
@@ -179,6 +179,36 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
 
   const rr = game.format === 'ROUND_ROBIN' ? await roundRobinStandings(id) : null;
 
+  /*
+   * SPEC.md §6.3 tie-breaker 3. The engine reports the groups it could not
+   * separate; the admin's coin flip settles them through CompleteControls,
+   * which posts the order back to markGameComplete. Labels and colours go with
+   * the ids so the admin is ordering names, not uuids.
+   */
+  /*
+   * Once scored, the table follows game_results rather than the live
+   * tie-breaker pass: a coin flip lives only in the recorded placements (and
+   * the audit log), so re-deriving the order here would show the pre-flip
+   * table under a "Final placings" list that disagrees with it.
+   */
+  const placementByEntry = new Map(results.map((result) => [result.entryId, result.placement]));
+  const tableRows =
+    rr && game.status === 'COMPLETE' && results.length > 0
+      ? [...rr.outcome.standings].sort(
+          (a, b) =>
+            (placementByEntry.get(a.entryId) ?? Number.MAX_SAFE_INTEGER) -
+            (placementByEntry.get(b.entryId) ?? Number.MAX_SAFE_INTEGER),
+        )
+      : (rr?.outcome.standings ?? []);
+
+  const ties: TiedEntry[][] = (rr?.outcome.unresolvedTies ?? []).map((group) =>
+    group.map((entryId) => ({
+      entryId,
+      label: entryById.get(entryId)?.label ?? 'Unknown',
+      teamColor: entryById.get(entryId)?.teamColor ?? null,
+    })),
+  );
+
   const isBracket = game.format === 'DOUBLE_ELIM' || game.format === 'SINGLE_ELIM';
 
   return (
@@ -258,7 +288,12 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
       )}
 
       {admin && allMatches.length > 0 && (
-        <CompleteControls gameId={game.id} status={game.status} outstanding={outstanding} />
+        <CompleteControls
+          gameId={game.id}
+          status={game.status}
+          outstanding={outstanding}
+          ties={ties}
+        />
       )}
 
       {rr && (
@@ -268,7 +303,7 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
             aside={<span className="text-sm text-muted">wins decide the points</span>}
           />
           <ul className="card flex flex-col gap-2">
-            {rr.outcome.standings.map((row, index) => {
+            {tableRows.map((row, index) => {
               const entry = entryById.get(row.entryId);
               return (
                 <li key={row.entryId} className="flex items-center gap-3">
@@ -289,10 +324,11 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
               );
             })}
           </ul>
-          {rr.outcome.unresolvedTies.length > 0 && (
+          {rr.outcome.unresolvedTies.length > 0 && game.status !== 'COMPLETE' && (
             <p className="card-hot text-base font-bold">
               {rr.outcome.unresolvedTies[0].length} entries are level on wins, head-to-head and
-              differential. That needs a coin flip &mdash; the admin decides.
+              differential. That needs a coin flip &mdash; the admin records it{' '}
+              {admin ? 'in the admin panel above' : 'before the game can be scored'}.
             </p>
           )}
         </section>
