@@ -113,10 +113,11 @@ Then redeploy or restart the app; nothing is cached in the process, so it
 reads the restored state on the next request. Join links survive a restore —
 credentials are rows like everything else.
 
-The script uses a local `pg_dump` if it is at least version 17 (the server's
-version; an older one refuses to connect), and otherwise runs `pg_dump` from
-the `postgres:17-alpine` image through Docker, which the dev setup already
-needs.
+The script uses a local `pg_dump` if it is at least version 18 (the live
+server's version — an older `pg_dump` refuses a newer server), and otherwise
+runs `pg_dump` from the `postgres:18-alpine` image through Docker, which the
+dev setup already needs. `SERVER_MAJOR` at the top of the script is the number
+to bump if the provider upgrades Postgres.
 
 ## Layout
 

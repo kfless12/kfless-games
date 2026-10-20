@@ -18,8 +18,8 @@
 #
 #   pg_restore --no-owner --no-privileges -d "$DATABASE_URL" backups/<file>.dump
 #
-# Needs either a pg_dump at least as new as the server (17) on the laptop, or
-# Docker, in which case the postgres:17-alpine image supplies one.
+# Needs either a pg_dump at least as new as the live server (18) on the laptop,
+# or Docker, in which case the postgres:18-alpine image supplies one.
 
 set -eu
 
@@ -44,10 +44,12 @@ trap 'status=$?; if [ "$status" -ne 0 ]; then rm -f "$out"; echo "backup failed;
 
 # Custom format: compressed, and pg_restore can pick tables out of it.
 #
-# pg_dump refuses to run against a server newer than itself, and the compose
-# database is Postgres 17 (docker-compose.yml). A Mac often has an older one
-# on PATH, so an old local tool is skipped in favour of the postgres:17 image.
-SERVER_MAJOR=17
+# pg_dump refuses to run against a server newer than itself. The live database
+# is Postgres 18 (/api/health reports it) and the compose one is 17; a newer
+# pg_dump handles both, an older one handles neither. A Mac often has an old
+# one on PATH, so anything below 18 is skipped in favour of the postgres:18
+# image. Bump this when the provider upgrades the server.
+SERVER_MAJOR=18
 local_major=0
 if command -v pg_dump >/dev/null 2>&1; then
   local_major="$(pg_dump --version | sed -E 's/.*[^0-9]([0-9]+)\.[0-9].*/\1/')"
