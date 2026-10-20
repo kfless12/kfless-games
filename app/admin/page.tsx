@@ -96,6 +96,9 @@ export default async function AdminPage() {
         <Link href="/queue" className="btn">
           Queue
         </Link>
+        <Link href="/admin/audit" className="btn">
+          Audit log
+        </Link>
       </nav>
 
       <dl className="card flex flex-wrap gap-x-8 gap-y-2 text-base">
