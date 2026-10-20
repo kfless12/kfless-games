@@ -2,6 +2,7 @@ import { asc, eq, inArray } from 'drizzle-orm';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
+import { Markdown } from '@/app/markdown';
 import { BracketView } from '@/app/games/bracket-view';
 import { CompleteControls, type TiedEntry } from '@/app/games/complete-controls';
 import { FfaForm, type FfaEntry } from '@/app/games/ffa-form';
@@ -249,6 +250,23 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
             : formatPointsMatrix(game.pointsMatrix)}
         </span>
       </div>
+
+      {/*
+        SPEC.md §4.3: rules are markdown the admin typed into the game form.
+        Behind a disclosure so a long rule sheet does not push the bracket off
+        the first screen — but one tap away, because "how do we play this
+        again" is the question people have standing at the table.
+      */}
+      {game.rules && game.rules.trim() !== '' && (
+        <details className="card-quiet">
+          <summary className="cursor-pointer text-base font-black uppercase tracking-wide">
+            How to play
+          </summary>
+          <div className="mt-3 border-t-2 border-rule pt-3">
+            <Markdown source={game.rules} />
+          </div>
+        </details>
+      )}
 
       {allMatches.length === 0 && (
         <EmptyState>
