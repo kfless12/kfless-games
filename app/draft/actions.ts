@@ -171,16 +171,29 @@ export async function makePick(
 
 export async function undoLastPick(
   _previous: DraftActionState,
-  _formData: FormData,
+  formData: FormData,
 ): Promise<DraftActionState> {
   const identity = await identify();
   if (!isAdmin(identity)) return fail('Admin only.');
+
+  /*
+   * Undoing the last pick of a COMPLETE draft reopens it: rosters stop being
+   * final and Mister Irrelevant loses the label, mid-event, from one tap on a
+   * button that sits on the draft page for all three days. The UI asks first;
+   * this makes the server ask too, so a stale page or a mis-sent form cannot
+   * skip the question (CLAUDE.md invariant 6).
+   */
+  const confirmedReopen = formData.get('confirmReopen') === 'true';
 
   const db = getDb();
 
   const outcome = await db.transaction(async (tx) => {
     const state = await lockDraft(tx);
     if (!state) return fail('No draft state.');
+
+    if (state.draftStatus === 'COMPLETE' && !confirmedReopen) {
+      return fail('The draft is complete. Confirm that you want to reopen it before undoing.');
+    }
 
     const [last] = await tx
       .select({
