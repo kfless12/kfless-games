@@ -6,6 +6,7 @@ import { Pool } from 'pg';
 
 import { generateBracket } from './bracket';
 import { scheduleGame, unscheduleGame } from './persist';
+import { requireSeededRoster } from '@/lib/db/require-seeded';
 
 loadEnv({ path: ['.env.local', '.env'], quiet: true });
 
@@ -34,6 +35,7 @@ before(async () => {
   } catch (error) {
     assert.fail(`cannot reach Postgres — run \`npm run db:up\` first.\n${String(error)}`);
   }
+  await requireSeededRoster(pool);
 });
 
 after(async () => {

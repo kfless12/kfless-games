@@ -4,6 +4,8 @@ import { after, before, describe, it } from 'node:test';
 import { config as loadEnv } from 'dotenv';
 import { Pool } from 'pg';
 
+import { requireSeededRoster } from './require-seeded';
+
 loadEnv({ path: ['.env.local', '.env'], quiet: true });
 
 /*
@@ -34,6 +36,8 @@ before(async () => {
         String(error),
     );
   }
+
+  await requireSeededRoster(pool);
 });
 
 after(async () => {
