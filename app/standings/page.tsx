@@ -1,11 +1,13 @@
 import Link from 'next/link';
 
-import { requireIdentity } from '@/lib/auth';
+import { isAdmin, requireIdentity } from '@/lib/auth';
 import { getDb } from '@/lib/db';
 import { standingsOverrides } from '@/lib/db/schema';
 import { loadHeadToHead, loadScoringData } from '@/lib/engine/submit';
 import { buildLeaderboard, type ScoringGame } from '@/lib/scoring';
 import { EmptyState, PageHeader, PlacementBadge, SectionHeading, TeamMark } from '@/app/ui';
+
+import { OverrideForm } from './override-form';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,7 +20,7 @@ export const dynamic = 'force-dynamic';
  * Every team is a link through to its profile and roster.
  */
 export default async function StandingsPage() {
-  await requireIdentity();
+  const identity = await requireIdentity();
 
   const db = getDb();
 
@@ -42,6 +44,18 @@ export default async function StandingsPage() {
   });
 
   const scoredGames = scoring.games.filter((game) => game.status === 'COMPLETE').length;
+
+  /*
+   * For the admin's tie-break panel: who is level on the first three
+   * tie-breakers right now. Head-to-head may still separate them, so this is
+   * context, not a verdict — the same grouping buildLeaderboard uses.
+   */
+  const byKey = new Map<string, string[]>();
+  for (const row of leaderboard) {
+    const key = `${row.totalPoints}|${row.firsts}|${row.seconds}`;
+    byKey.set(key, [...(byKey.get(key) ?? []), row.teamName]);
+  }
+  const levelGroups = [...byKey.values()].filter((group) => group.length > 1);
 
   return (
     <main className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-6 px-4 py-6">
@@ -123,6 +137,22 @@ export default async function StandingsPage() {
       <p className="text-sm text-muted">
         Tap a team for its roster and player cards.
       </p>
+
+      {isAdmin(identity) && (
+        <OverrideForm
+          teams={scoring.teams.map((team) => ({
+            id: team.id,
+            name: team.name,
+            colorHex: team.colorHex,
+          }))}
+          existing={overrides.map((row) => ({
+            teamId: row.teamId,
+            priority: row.priority,
+            reason: row.reason,
+          }))}
+          levelGroups={levelGroups}
+        />
+      )}
     </main>
   );
 }

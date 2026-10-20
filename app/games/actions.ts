@@ -32,6 +32,7 @@ function fail(error: string): ResultState {
 function revalidate(gameId?: string) {
   revalidatePath('/games');
   revalidatePath('/');
+  revalidatePath('/standings');
   if (gameId) revalidatePath(`/games/${gameId}`);
 }
 
